@@ -3,6 +3,7 @@
 
 #include <ccan/list/list.h>
 #include <sys/types.h>
+#include <stdio.h>
 
 enum toml_type {
 	TOML_ROOT,
@@ -26,12 +27,12 @@ struct toml_node {
 };
 
 struct toml_map {
-	struct list_node list;
+	struct list_node map;
 	struct toml_node node;
 };
 
 struct toml_list {
-	struct list_node head;
+	struct list_node list;
 	struct toml_node node;
 };
 
