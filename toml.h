@@ -4,6 +4,7 @@
 #include <ccan/list/list.h>
 #include <sys/types.h>
 #include <stdio.h>
+#include <time.h>
 
 enum toml_type {
 	TOML_ROOT,
@@ -12,6 +13,7 @@ enum toml_type {
 	TOML_INT,
 	TOML_FLOAT,
 	TOML_STRING,
+	TOML_DATE,
 };
 
 struct toml_node {
@@ -23,6 +25,7 @@ struct toml_node {
 		int64_t integer;
 		double floating;
 		char *string;
+		time_t epoch;
 	} value;
 };
 
@@ -37,7 +40,7 @@ struct toml_list {
 };
 
 void toml_init(struct toml_node);
-int toml_parse(struct toml_node, int);
+int toml_parse(struct toml_node, int fileno);
 void toml_dump(struct toml_node, FILE *);
 void toml_free(struct toml_node);
 

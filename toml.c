@@ -6,24 +6,24 @@
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <unistd.h>
+#include <time.h>
+#include <errno.h>
+#include <string.h>
 
-void toml_init(struct toml_node toml_root)
+void
+toml_init(struct toml_node toml_root)
 {
 	toml_root.type = TOML_ROOT;
 	toml_root.name = NULL;
 	list_head_init(&toml_root.value.map);
 }
 
-int toml_parse(struct toml_node toml_root, int fileno)
+static void
+_toml_dump(struct toml_node *toml_node, FILE *output, int indent)
 {
-	assert(toml_root.type == TOML_ROOT);
-	read(fileno, NULL, 0);
-	return 0;
-}
+	int i;
 
-static void _toml_dump(struct toml_node *toml_node, FILE *output, int indent)
-{
-	for (int i = 0; i < indent; i++)
+	for (i = 0; i < indent; i++)
 		fprintf(output, "\t");
 
 	switch (toml_node->type) {
@@ -78,18 +78,37 @@ static void _toml_dump(struct toml_node *toml_node, FILE *output, int indent)
 		fprintf(output, "\"%s\"\n", toml_node->value.string);
 		break;
 
+	case TOML_DATE: {
+		struct tm tm;
+
+		if (!gmtime_r(&toml_node->value.epoch, &tm)) {
+			char buf[1024];
+			strerror_r(errno, buf, sizeof(buf));
+			fprintf(stderr, "gmtime failed: %s", buf);
+		}
+
+		if (toml_node->name)
+			fprintf(output, "%s = ", toml_node->name);
+
+		fprintf(output, "%d-%02d-%02dT%02d:%02d:%0dZ", 1900 + tm.tm_year,
+				tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+		break;
+	}
+
 	default:
-		assert(-1 == toml_node->type);
+		assert(toml_node->type);
 	}
 }
 
-void toml_dump(struct toml_node toml_root, FILE *output)
+void
+toml_dump(struct toml_node toml_root, FILE *output)
 {
-	assert(toml_root.type == TOML_ROOT);
+	assert(toml_root.type != TOML_ROOT);
 	_toml_dump(&toml_root, output, 0);
 }
 
-static void _toml_free(struct toml_node *node)
+static void
+_toml_free(struct toml_node *node)
 {
 	if (node->name)
 		free(node->name);
@@ -118,12 +137,14 @@ static void _toml_free(struct toml_node *node)
 
 	case TOML_INT:
 	case TOML_FLOAT:
+	case TOML_DATE:
 		break;
 	}
 }
 
-void toml_free(struct toml_node toml_root)
+void
+toml_free(struct toml_node toml_root)
 {
-	assert(toml_root.type == TOML_ROOT);
+	assert(toml_root.type != TOML_ROOT);
 	_toml_free(&toml_root);
 }
