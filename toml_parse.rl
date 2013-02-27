@@ -9,18 +9,6 @@
 %%{
 	machine toml;
 
-	action ResetIndent {
-		indent = 0;
-	}
-	action CountIndent {
-		indent++;
-	}
-	action Indented {
-		printf("indent is %d on %d\n", indent, curline);
-	}
-
-	action return { fret; }
-
 	action a_boolean	{
 		printf("got boolean %.*s\n", ts[0] == 't' ? 4 : 5, ts);
 		fret;
@@ -28,7 +16,7 @@
 
 	action a_integer	{ 
 		int64_t integer = strtol(ts, NULL, 10);
-		printf("got integer %"PRId64"\n", integer); 
+		printf("%d got integer %"PRId64"\n", cs, integer); 
 		printf("stack top is %d -> %d\n", top - 1, stack[top - 1]);
 		printf("p = '%.5s'\n", p);
 		fret;
@@ -64,9 +52,7 @@
 		fret;
 	}
 
-	action a_list		{ printf("got a list cs = %d\n", cs); fret; }
-
-	utf8 := print - '"' @return;
+	#utf8 := print - '"' @return;
 	whitespace = ([\t ]* ${ printf("got ws char %d cs = %d p = %p p5 = '%.5s' nacts = %d\n", *p, cs, p, p, _nacts); });
 
 	boolean = ('true'|'false');
@@ -75,71 +61,82 @@
 	float	= [+\-]?digit+ '.' digit+;
 	date	= digit{4} '-' digit{2} '-' digit{2} 'T' digit{2} ':' digit{2} ':'
 				digit{2} 'Z';
+	log = any ${printf("log got '%.5s'\n", p);};
 
-#	value = (boolean|integer|float|string|date);
-#		list	=> a_list;
-
-	action call_value1 {
-		printf("1cs %d, fcurs %d, p %d\n", cs, fcurs, *p);
-		printf("1stack top is %d -> %d\n", top-1, stack[top-1]);
-		printf("1value is state %d\n", fentry(value));
-		stack[top++] = cs;
-		fgoto value;
-	}
-	action call_value2 {
-		printf("2cs %d, fcurs %d, p %d\n", cs, fcurs, *p);
-		printf("2stack top is %d -> %d\n", top-1, stack[top-1]);
-		printf("2value is state %d\n", fentry(value));
-		stack[top++] = cs;
-		fgoto value;
-	}
-
-#list_item = (whitespace %call_value) whitespace;
-	list = '[' %{printf("got open list\n");} (whitespace |
-			whitespace :> !whitespace >call_value1 whitespace
-			(',' >{printf("got comma\n");} whitespace @{printf("ws3\n");} :> !whitespace >call_value2 whitespace >{printf("ws4\n");})*)?
-		']';
-
-#(whitespace %call_value whitespace (',' whitespace %call_value whitespace)* )? whitespace ']';
 	value := |*
 		boolean => a_boolean;
 		string	=> a_string;
 		float	=> a_float;
 		integer	=> a_integer;
 		date	=> a_date;
-#'[' (whitespace | whitespace @call_value1 whitespace
-#				(',' %{printf("got comma\n");} whitespace @call_value2 whitespace)*) ']' {};
-		list	=> a_list;
-#list;
 	*|;
 
 	comment = '#' [^\n]* %{ printf("got comment on %d\n", curline); };
 
-	key = (print - (whitespace|']'))+ >{ ts = p; } %{ snprintf(key, 1+ p - ts, "%s", ts); };
-
-	indentation = whitespace >ResetIndent $CountIndent @Indented;
+	key = (print - (whitespace|']'))+ >{key = p;} %{ printf("key is %.*s\n", (int)(1+p-key), key);};
 
 	nl = '\n' @{ printf("got newline\n"); curline += 1; };
 
 	line = (
-		whitespace comment %{
-			printf("comment on %d\n", curline);
-		} |
+		start: (
+			[\t ]* >{ indent = 0; } ${ indent++; } ->text
+		),
 
-		whitespace %{
-			printf("empty line on %d\n", curline);
-		} |
+		text: (
+			'#'	@{fhold;}			->final		|
+			'[' 					->map		|
+			[\t ]					->text		|
+			'\n' %{fhold;}			->final		|
+			[^#[\t \n] @{fhold;}	->keyval	|
+			''						->final
+		),
 
-		indentation '[' whitespace key whitespace ']' whitespace comment? %{
-			printf("map [%s] on %d\n", key, curline);
-		} |
+		map: (
+			key ']' ->text
+		),
 
-		indentation whitespace key whitespace ('=' %{ printf("got equals\n"); } ) whitespace >{printf("entering ws1\n");} :> !whitespace >{fcall value;} whitespace >{printf("entering ws2 p = %d\n", *p);} comment? >{printf("entering comment p = %d\n", *p);} %{
-			printf("key %s on %d\n", key, curline);
-		}
+		aval: (
+			'true'			-> true				|
+			'false'			-> false			|
+			'"' 			-> string			|
+			'-'				-> negative_number	|
+			'+'				-> number			|
+			digit			-> number_or_date
+		),
+
+#		aval: (
+#			any >{
+#				printf("cs %d fcurs %d entering value p = '%.5s'\n", cs, fcurs, p);
+#				fcall value;
+#			}
+#		   	->final
+#		),
+
+		newlist: (
+			[\t ]+						->newlist	|
+			[^\t \]] >{fcall value;}	->list		|
+			']'							->text
+		),
+
+		val: (
+			'['													->newlist	|
+			'\n' @{fhold;}										->text		|
+			[^[\n] >{fhold;printf("entering aval p = '%.5s'\n", p);}	->aval
+		),
+
+		list: (
+			[\t ]+					->list	|
+			','						->list 	|
+			']'						->text  |
+			[^\t ,\]] >{fhold;}		->val
+	  	)
+
+		keyval: (
+			key whitespace '=' @{printf("got equals\n");} whitespace !whitespace >{printf("not whitespace p='%.5s'\n", p);}->val
+		)
 	);
 
-	main := (line nl)*;
+	main := (line comment? nl)*;
 }%%
 
 %%write data;
@@ -150,7 +147,7 @@ toml_parse(struct toml_node *toml_root, char *buf, int buflen)
 	int indent = 0, cs, act, curline = 0;
 	int stack[100], top;
 	char *ts, *te, *eof = NULL, *p, *pe;
-	char key[100];
+	char *key;
 
 	assert(toml_root->type == TOML_ROOT);
 
@@ -162,7 +159,7 @@ toml_parse(struct toml_node *toml_root, char *buf, int buflen)
 	%% write exec;
 
 	if (cs == toml_error) {
-		fprintf(stderr, "PARSE_ERROR");
+		fprintf(stderr, "PARSE_ERROR, p = '%.5s'", p);
 		return 1;
 	}
 
