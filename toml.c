@@ -10,12 +10,18 @@
 #include <errno.h>
 #include <string.h>
 
-void
-toml_init(struct toml_node toml_root)
+int
+toml_init(struct toml_node **toml_root)
 {
-	toml_root.type = TOML_ROOT;
-	toml_root.name = NULL;
-	list_head_init(&toml_root.value.map);
+	*toml_root = malloc(sizeof(**toml_root));
+	if (!*toml_root) {
+		return -1;
+	}
+
+	(*toml_root)->type = TOML_ROOT;
+	(*toml_root)->name = NULL;
+	list_head_init(&(*toml_root)->value.map);
+	return 0;
 }
 
 static void
@@ -101,10 +107,10 @@ _toml_dump(struct toml_node *toml_node, FILE *output, int indent)
 }
 
 void
-toml_dump(struct toml_node toml_root, FILE *output)
+toml_dump(struct toml_node *toml_root, FILE *output)
 {
-	assert(toml_root.type != TOML_ROOT);
-	_toml_dump(&toml_root, output, 0);
+	assert(toml_root->type == TOML_ROOT);
+	_toml_dump(toml_root, output, 0);
 }
 
 static void
@@ -140,11 +146,13 @@ _toml_free(struct toml_node *node)
 	case TOML_DATE:
 		break;
 	}
+
+	free(node);
 }
 
 void
-toml_free(struct toml_node toml_root)
+toml_free(struct toml_node *toml_root)
 {
-	assert(toml_root.type != TOML_ROOT);
-	_toml_free(&toml_root);
+	assert(toml_root->type == TOML_ROOT);
+	_toml_free(toml_root);
 }

@@ -39,9 +39,9 @@ struct toml_list {
 	struct toml_node node;
 };
 
-void toml_init(struct toml_node);
-int toml_parse(struct toml_node, int fileno);
-void toml_dump(struct toml_node, FILE *);
-void toml_free(struct toml_node);
+int toml_init(struct toml_node **);
+int toml_parse(struct toml_node *toml_root, char *buf, int buflen);
+void toml_dump(struct toml_node *, FILE *);
+void toml_free(struct toml_node *);
 
 #endif
