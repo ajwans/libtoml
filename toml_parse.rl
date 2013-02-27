@@ -9,90 +9,53 @@
 %%{
 	machine toml;
 
-	action a_boolean	{
-		printf("got boolean %.*s\n", ts[0] == 't' ? 4 : 5, ts);
-		fret;
-	}
-
-	action a_integer	{ 
-		int64_t integer = strtol(ts, NULL, 10);
-		printf("%d got integer %"PRId64"\n", cs, integer); 
-		printf("stack top is %d -> %d\n", top - 1, stack[top - 1]);
-		printf("p = '%.5s'\n", p);
-		fret;
-	}
-
-	action a_float		{ 
-		double floating = strtod(ts, NULL);
-		printf("got float %lf\n", floating); fret;
-	}
-
-	action a_string		{
-		printf("got string %.*s\n", (int)(te-ts), ts);
-		fret;
-	}
-
-	action a_date		{
-		struct tm tm;
-		time_t t;
-
-		sscanf(ts, "%4d-%2d-%2dT%2d:%2d:%2dZ", &tm.tm_year, &tm.tm_mon,
-						&tm.tm_mday, &tm.tm_hour, &tm.tm_min, &tm.tm_sec);
-
-		tm.tm_year -= 1900;
-		tm.tm_mon -= 1;
-		tm.tm_zone = "UTC";
-		tm.tm_gmtoff = 0;
-
-		t = timegm(&tm);
-		printf("got date %d\n", (int)t);
-
-		printf("p = '%.5s'\n", p);
-
-		fret;
-	}
-
-	#utf8 := print - '"' @return;
-	whitespace = ([\t ]* ${ printf("got ws char %d cs = %d p = %p p5 = '%.5s' nacts = %d\n", *p, cs, p, p, _nacts); });
-
-	boolean = ('true'|'false');
-	string	= '"' (print - '"')* '"';
-	integer	= [+\-]?digit+;
-	float	= [+\-]?digit+ '.' digit+;
-	date	= digit{4} '-' digit{2} '-' digit{2} 'T' digit{2} ':' digit{2} ':'
-				digit{2} 'Z';
-	log = any ${printf("log got '%.5s'\n", p);};
-
-	value := |*
-		boolean => a_boolean;
-		string	=> a_string;
-		float	=> a_float;
-		integer	=> a_integer;
-		date	=> a_date;
-	*|;
+	whitespace = ([\t ]* ${ printf("got ws char %d cs = %d p = %p p5 = '%.5s'\n", *p, cs, p, p); });
 
 	comment = '#' [^\n]* %{ printf("got comment on %d\n", curline); };
 
-	key = (print - (whitespace|']'))+ >{key = p;} %{ printf("key is %.*s\n", (int)(1+p-key), key);};
+	key = (print - (whitespace|']'))+ >{key = p;} %{ printf("key is %.*s\n", (int)(p-key), key);};
 
 	nl = '\n' @{ printf("got newline\n"); curline += 1; };
 
-	line = (
+	lines = (
 		start: (
 			[\t ]* >{ indent = 0; } ${ indent++; } ->text
 		),
 
-		text: (
-			'#'	@{fhold;}			->final		|
-			'[' 					->map		|
-			[\t ]					->text		|
-			'\n' %{fhold;}			->final		|
-			[^#[\t \n] @{fhold;}	->keyval	|
-			''						->final
+		# just discard everything until newline
+		comment: ( [^\n]+[\n] ->start ),
+
+		map: ( key ']' ->text ),
+
+		true: ( any @{printf("TRUE\n");}			->start ),
+		false: ( any @{printf("FALSE\n");}			->start ),
+		string: (
+			'"'  ${printf("END OF STRING\n");}		->start |
+			[^"] ${printf("CHAR %c\n", *p);}		->string
+		),
+		negative_number: (
+			digit+ -> negative_fractional_part
+		),
+		negative_fractional_part: (
+			[.]digit+ @{printf("NEGATIVE_DECIMAL\n");}	->start
+			[^.]	  @{printf("NEGATIVE_INT\n");}		->start
 		),
 
-		map: (
-			key ']' ->text
+		number_or_date: (
+			digit ${printf("NOD p = '%.5s'\n", p);}	->number_or_date	|
+			'-'										->date				|
+			'.'										->fractional_part	|
+			[\t \n,\]] @{fhold; printf("INT\n");}	->start
+		),
+
+		date: (
+			digit{2} '-' digit{2} 'T' digit{2} ':' digit{2} ':' digit{2} 'Z' 
+			>{printf("DATE p = '%.5s'\n", p);} @{printf("DATE\n");} ->start
+		),
+
+		fractional_part: (
+			[0-9] ${printf("DECIMAL\n");}				->fractional_part |
+			[^0-9]  ${printf("INT1 p = '%.5s'\n", p);}	->start
 		),
 
 		aval: (
@@ -100,9 +63,36 @@
 			'false'			-> false			|
 			'"' 			-> string			|
 			'-'				-> negative_number	|
-			'+'				-> number			|
-			digit			-> number_or_date
+			'+'				-> number_or_date	|
+			digit >{printf("DIGIT p = '%.5s'\n", p); fhold;}	-> number_or_date
 		),
+
+		newlist: (
+			[\t \n]							->newlist	|
+			']'	@{printf("EMPTY LIST\n");}	->start		|
+			[^\t \n\]]	>{fhold;}			->val
+		),
+
+		val: (
+			[\t \n]							-> val		|
+			'[' @{printf("NEWLIST\n");}		-> newlist	|
+			[^\t \n[]	>{printf("AVAL p = '%.5s'\n", p);fhold;}	->aval
+		)
+
+		keyval: (
+			key whitespace '=' @{printf("got equals\n");} ->val
+		),
+
+		text: (
+			'#' @{printf("COMMENT\n");}					->comment	|
+			'[' @{printf("MAP\n");}						->map		|
+			[\t ]										->text		|
+			'\n'@{printf("NEWLINE\n");}					->start     |
+			','	@{printf("COMMA\n");}					->val		|
+			']' @{printf("ENDLIST p = '%.5s'\n", p);}	->text		|
+			[^#[\t \n,\]]	${fhold;printf("KEYVAL p = '%.5s'\n", p);}	->keyval
+		)
+
 
 #		aval: (
 #			any >{
@@ -112,31 +102,28 @@
 #		   	->final
 #		),
 
-		newlist: (
-			[\t ]+						->newlist	|
-			[^\t \]] >{fcall value;}	->list		|
-			']'							->text
-		),
+#		newlist: (
+#			[\t ]+						->newlist	|
+#			[^\t \]] >{fcall value;}	->list		|
+#			']'							->text
+#		),
+#
+#		val: (
+#			'['													->newlist	|
+#			'\n' @{fhold;}										->text		|
+#			[^[\n] >{fhold;printf("entering aval p = '%.5s'\n", p);}	->aval
+#		),
+#
+#		list: (
+#			[\t ]+					->list	|
+#			','						->list 	|
+#			']'						->text  |
+#			[^\t ,\]] >{fhold;}		->val
+#	  	)
 
-		val: (
-			'['													->newlist	|
-			'\n' @{fhold;}										->text		|
-			[^[\n] >{fhold;printf("entering aval p = '%.5s'\n", p);}	->aval
-		),
-
-		list: (
-			[\t ]+					->list	|
-			','						->list 	|
-			']'						->text  |
-			[^\t ,\]] >{fhold;}		->val
-	  	)
-
-		keyval: (
-			key whitespace '=' @{printf("got equals\n");} whitespace !whitespace >{printf("not whitespace p='%.5s'\n", p);}->val
-		)
 	);
 
-	main := (line comment? nl)*;
+	main := lines?;
 }%%
 
 %%write data;
@@ -144,9 +131,8 @@
 int
 toml_parse(struct toml_node *toml_root, char *buf, int buflen)
 {
-	int indent = 0, cs, act, curline = 0;
-	int stack[100], top;
-	char *ts, *te, *eof = NULL, *p, *pe;
+	int indent = 0, cs;
+	char *p, *pe;
 	char *key;
 
 	assert(toml_root->type == TOML_ROOT);

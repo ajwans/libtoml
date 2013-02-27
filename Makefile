@@ -32,10 +32,10 @@ main: main.o shared
 	$(CC) $(CFLAGS) -o $@ $< -L$(PWD) -l$(LIBNAME)
 
 %.c: %.rl
-	ragel $<
+	ragel -G2 $<
 
 %.dot: %.rl
-	ragel -V $< > $@
+	ragel -G2 -V $< > $@
 
 %.png: %.dot
 	dot -Tpng -o$@ $<
