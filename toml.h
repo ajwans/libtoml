@@ -7,8 +7,8 @@
 #include <time.h>
 
 enum toml_type {
-	TOML_ROOT,
-	TOML_KEYMAP,
+	TOML_ROOT = 1,
+	TOML_KEYGROUP,
 	TOML_LIST,
 	TOML_INT,
 	TOML_FLOAT,
@@ -19,6 +19,7 @@ enum toml_type {
 struct toml_node {
 	enum toml_type type;
 	char *name;
+	struct toml_node *parent;
 	union {
 		struct list_head map;
 		struct list_head list;
@@ -29,14 +30,14 @@ struct toml_node {
 	} value;
 };
 
-struct toml_map {
+struct toml_keygroup_item {
 	struct list_node map;
 	struct toml_node node;
 };
 
-struct toml_list {
+struct toml_list_item {
 	struct list_node list;
-	struct toml_node node;
+	struct toml_node *node;
 };
 
 int toml_init(struct toml_node **);

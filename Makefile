@@ -5,6 +5,7 @@ CC := gcc
 CFLAGS := -Wall -Wextra -Werror -ggdb -fPIC -Wstrict-prototypes -I. \
 		  -Wmissing-prototypes -D_FORTIFY_SOURCE=2 -Wshadow -D_GNU_SOURCE
 
+
 LIBNAME := toml
 
 ARCH := $(shell uname -m)
