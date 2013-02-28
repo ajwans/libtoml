@@ -28,8 +28,38 @@ toml_init(struct toml_node **toml_root)
 	return 0;
 }
 
+struct toml_node *
+toml_get(struct toml_node *toml_root, char *key)
+{
+	char *ancestor, *tofree, *name;
+	struct toml_node *node = toml_root;
+
+	tofree = name = strdup(key);
+
+	while ((ancestor = strsep(&name, "."))) {
+		struct toml_keygroup_item *item;
+		int found = 0;
+
+		list_for_each(&node->value.map, item, map) {
+			if (strcmp(item->node.name, ancestor) == 0) {
+				node = &item->node;
+				found = 1;
+				break;
+			}
+		}
+
+		if (!found) {
+			node = NULL;
+			break;
+		}
+	}
+
+	return node;
+}
+
 static void
-_toml_dump(struct toml_node *toml_node, FILE *output, char *bname, int indent, int newline)
+_toml_dump(struct toml_node *toml_node, FILE *output, char *bname, int indent,
+																	int newline)
 {
 	int i;
 
@@ -124,7 +154,6 @@ _toml_dump(struct toml_node *toml_node, FILE *output, char *bname, int indent, i
 void
 toml_dump(struct toml_node *toml_root, FILE *output)
 {
-	assert(toml_root->type == TOML_ROOT);
 	_toml_dump(toml_root, output, NULL, 0, 1);
 }
 
@@ -137,18 +166,24 @@ _toml_free(struct toml_node *node)
 	switch (node->type) {
 	case TOML_ROOT:
 	case TOML_KEYGROUP: {
-		struct toml_keygroup_item *item = NULL;
+		struct toml_keygroup_item *item = NULL, *next = NULL;
 
-		list_for_each(&node->value.map, item, map)
+		list_for_each_safe(&node->value.map, item, next, map) {
+			list_del(&item->map);
 			_toml_free(&item->node);
+			free(item);
+		}
 		break;
 	}
 
 	case TOML_LIST: {
-		struct toml_list_item *item = NULL;
+		struct toml_list_item *item = NULL, *next = NULL;
 
-		list_for_each(&node->value.list, item, list)
+		list_for_each_safe(&node->value.list, item, next, list) {
+			list_del(&item->list);
 			_toml_free(&item->node);
+			free(item);
+		}
 		break;
 	}
 
@@ -161,8 +196,6 @@ _toml_free(struct toml_node *node)
 	case TOML_DATE:
 		break;
 	}
-
-	free(node);
 }
 
 void

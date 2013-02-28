@@ -40,7 +40,8 @@ struct toml_list_item {
 };
 
 int toml_init(struct toml_node **);
-int toml_parse(struct toml_node *toml_root, char *buf, int buflen);
+int toml_parse(struct toml_node *, char *, int);
+struct toml_node *toml_get(struct toml_node *, char *);
 void toml_dump(struct toml_node *, FILE *);
 void toml_free(struct toml_node *);
 
