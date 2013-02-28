@@ -95,6 +95,7 @@ struct toml_stack_item {
 	}
 
 	action saw_string {
+		int len = strp - string;
 		*strp = 0;
 
 		struct toml_stack_item *cur_list =
@@ -111,7 +112,8 @@ struct toml_stack_item {
 			struct toml_list_item *item = malloc(sizeof(*item));
 
 			item->node.type = TOML_STRING;
-			item->node.value.string = strdup(string);
+			item->node.value.string = malloc(len);
+			memcpy(item->node.value.string, string, len);
 			list_add_tail(&cur_list->node->value.list, &item->list);
 		} else {
 			struct toml_keygroup_item *item = malloc(sizeof(*item));
@@ -119,7 +121,8 @@ struct toml_stack_item {
 			list_add_tail(&cur_keygroup->value.map, &item->map);
 			item->node.name = name;
 			item->node.type = TOML_STRING;
-			item->node.value.string = strdup(string);
+			item->node.value.string = malloc(len);
+			memcpy(item->node.value.string, string, len);
 		}
 	}
 
