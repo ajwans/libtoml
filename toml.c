@@ -54,6 +54,8 @@ toml_get(struct toml_node *toml_root, char *key)
 		}
 	}
 
+	free(tofree);
+
 	return node;
 }
 
