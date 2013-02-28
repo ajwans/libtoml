@@ -2,9 +2,9 @@ SRCS := toml.c toml_parse.c
 OBJS := $(SRCS:.c=.o)
 
 CC := gcc
-CFLAGS := -Wall -Wextra -Werror -ggdb -fPIC -Wstrict-prototypes -I. \
-		  -Wmissing-prototypes -D_FORTIFY_SOURCE=2 -Wshadow -D_GNU_SOURCE
-
+CFLAGS := -Wall -Wextra -Werror -ggdb -fPIC -Wstrict-prototypes -I.			\
+		  -Wmissing-prototypes -D_FORTIFY_SOURCE=2 -Wshadow -D_GNU_SOURCE	\
+		  -I/opt/local/include
 
 LIBNAME := toml
 
@@ -31,6 +31,9 @@ lib$(LIBNAME).$(LIBEXT): $(OBJS)
 
 main: main.o shared
 	$(CC) $(CFLAGS) -o $@ $< -L$(PWD) -l$(LIBNAME)
+
+test: test.o shared
+	$(CC) $(CFLAGS) -o $@ $< -L$(PWD) -l$(LIBNAME) -L/opt/local/lib -lcunit -lncurses
 
 %.c: %.rl
 	ragel -G2 $<

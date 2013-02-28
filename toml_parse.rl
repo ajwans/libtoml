@@ -14,6 +14,23 @@ struct toml_stack_item {
 	struct toml_node *node;
 };
 
+static const char *
+toml_type_to_str(enum toml_type type)
+{
+#define CASE_ENUM_TO_STR(x) case(x): return #x
+	switch (type) {
+	CASE_ENUM_TO_STR(TOML_ROOT);
+	CASE_ENUM_TO_STR(TOML_KEYGROUP);
+	CASE_ENUM_TO_STR(TOML_LIST);
+	CASE_ENUM_TO_STR(TOML_INT);
+	CASE_ENUM_TO_STR(TOML_FLOAT);
+	CASE_ENUM_TO_STR(TOML_STRING);
+	CASE_ENUM_TO_STR(TOML_DATE);
+	}
+#undef CASE_ENUM_TO_STR
+	return "unknown toml type";
+}
+
 %%{
 	machine toml;
 
@@ -38,9 +55,11 @@ struct toml_stack_item {
 
 		if (cur_list) {
 			if (cur_list->list_type && cur_list->list_type != TOML_INT) {
-				fprintf(stderr, "incompatible types list %d this %d line %d\n",
-									cur_list->list_type, TOML_INT, curline);
-				exit(1);
+				fprintf(stderr, "incompatible types list %s this %s line %d\n",
+						toml_type_to_str(cur_list->list_type),
+						toml_type_to_str(TOML_INT), curline);
+				parse_error = 1;
+				fbreak;
 			}
 			cur_list->list_type = TOML_INT;
 
@@ -71,9 +90,11 @@ struct toml_stack_item {
 
 		if (cur_list) {
 			if (cur_list->list_type && cur_list->list_type != TOML_FLOAT) {
-				fprintf(stderr, "incompatible types list %d this %d line %d\n",
-									cur_list->list_type, TOML_FLOAT, curline);
-				exit(1);
+				fprintf(stderr, "incompatible types list %s this %s line %d\n",
+						toml_type_to_str(cur_list->list_type),
+						toml_type_to_str(TOML_FLOAT), curline);
+				parse_error = 1;
+				fbreak;
 			}
 			cur_list->list_type = TOML_FLOAT;
 
@@ -103,9 +124,11 @@ struct toml_stack_item {
 
 		if (cur_list) {
 			if (cur_list->list_type && cur_list->list_type != TOML_STRING) {
-				fprintf(stderr, "incompatible types list %d this %d line %d\n",
-									cur_list->list_type, TOML_STRING, curline);
-				exit(1);
+				fprintf(stderr, "incompatible types list %s this %s line %d\n",
+						toml_type_to_str(cur_list->list_type),
+						toml_type_to_str(TOML_STRING), curline);
+				parse_error = 1;
+				fbreak;
 			}
 			cur_list->list_type = TOML_STRING;
 
@@ -132,9 +155,11 @@ struct toml_stack_item {
 
 		if (cur_list) {
 			if (cur_list->list_type && cur_list->list_type != TOML_DATE) {
-				fprintf(stderr, "incompatible types list %d this %d line %d\n",
-									cur_list->list_type, TOML_DATE, curline);
-				exit(1);
+				fprintf(stderr, "incompatible types list %s this %s line %d\n",
+						toml_type_to_str(cur_list->list_type),
+						toml_type_to_str(TOML_DATE), curline);
+				parse_error = 1;
+				fbreak;
 			}
 			cur_list->list_type = TOML_DATE;
 
@@ -229,6 +254,11 @@ struct toml_stack_item {
 		}
 
 		free(tofree);
+
+		if (place->type != TOML_KEYGROUP) {
+			parse_error = 1;
+			fbreak;
+		}
 
 		cur_keygroup = place;
 	}
@@ -371,6 +401,7 @@ toml_parse(struct toml_node *toml_root, char *buf, int buflen)
 	struct tm tm;
 	double floating;
 	char *name;
+	int parse_error = 0;
 
 	struct toml_node *cur_keygroup = toml_root;
 
@@ -386,7 +417,7 @@ toml_parse(struct toml_node *toml_root, char *buf, int buflen)
 
 	%% write exec;
 
-	if (cs == toml_error) {
+	if (cs == toml_error || parse_error) {
 		fprintf(stderr, "PARSE_ERROR, line %d, p = '%.5s'", curline, p);
 		return 1;
 	}

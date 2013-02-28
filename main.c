@@ -67,7 +67,6 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-
 	m = mmap(NULL, st.st_size, PROT_READ, MAP_FILE|MAP_PRIVATE, fd, 0);
 	if (!m) {
 		fprintf(stderr, "mmap: %s\n", strerror(errno));
