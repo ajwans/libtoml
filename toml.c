@@ -22,7 +22,6 @@ toml_init(struct toml_node **toml_root)
 
 	toml_node->type = TOML_ROOT;
 	toml_node->name = NULL;
-	toml_node->parent = toml_node;
 	list_head_init(&toml_node->value.map);
 
 	*toml_root = toml_node;
@@ -30,11 +29,11 @@ toml_init(struct toml_node **toml_root)
 }
 
 static void
-_toml_dump(struct toml_node *toml_node, FILE *output, int indent)
+_toml_dump(struct toml_node *toml_node, FILE *output, char *bname, int indent, int newline)
 {
 	int i;
 
-	for (i = 0; i < indent; i++)
+	for (i = 0; i < indent - 1; i++)
 		fprintf(output, "\t");
 
 	switch (toml_node->type) {
@@ -42,20 +41,21 @@ _toml_dump(struct toml_node *toml_node, FILE *output, int indent)
 		struct toml_keygroup_item *item = NULL;
 
 		list_for_each(&toml_node->value.map, item, map) {
-			_toml_dump(&item->node, output, indent);
+			_toml_dump(&item->node, output, toml_node->name, indent, 1);
 		}
 		break;
 	}
 
 	case TOML_KEYGROUP: {
 		struct toml_keygroup_item *item = NULL;
+		char name[100];
 
-		if (toml_node->parent->type != TOML_ROOT)
-			fprintf(output, "\t");
+		sprintf(name, "%s%s%s", bname ? bname : "", bname ? "." : "",
+															toml_node->name);
 
-		fprintf(output, "[%s]\n", toml_node->name);
+		fprintf(output, "%s[%s]\n", indent ? "\t": "", name);
 		list_for_each(&toml_node->value.map, item, map) {
-			_toml_dump(&item->node, output, toml_node->parent->type == TOML_ROOT? indent : indent+1);
+			_toml_dump(&item->node, output, name, indent+1, 1);
 		}
 		fprintf(output, "\n");
 		break;
@@ -68,10 +68,10 @@ _toml_dump(struct toml_node *toml_node, FILE *output, int indent)
 			fprintf(output, "%s = ", toml_node->name);
 		fprintf(output, "[ ");
 		list_for_each(&toml_node->value.list, item, list) {
-			_toml_dump(item->node, output, 0);
+			_toml_dump(&item->node, output, toml_node->name, 0, 0);
 			fprintf(output, ", ");
 		}
-		fprintf(output, " ]\n");
+		fprintf(output, " ]%s", newline ? "\n" : "");
 
 		break;
 	}
@@ -79,19 +79,22 @@ _toml_dump(struct toml_node *toml_node, FILE *output, int indent)
 	case TOML_INT:
 		if (toml_node->name)
 			fprintf(output, "%s = ", toml_node->name);
-		fprintf(output, "%"PRId64"\n", toml_node->value.integer);
+		fprintf(output, "%"PRId64"%s", toml_node->value.integer,
+														newline ? "\n" : "");
 		break;
 
 	case TOML_FLOAT:
 		if (toml_node->name)
 			fprintf(output, "%s = ", toml_node->name);
-		fprintf(output, " %f\n", toml_node->value.floating);
+		fprintf(output, " %f%s", toml_node->value.floating,
+														newline ? "\n" : "");
 		break;
 
 	case TOML_STRING:
 		if (toml_node->name)
 			fprintf(output, "%s = ", toml_node->name);
-		fprintf(output, "\"%s\"\n", toml_node->value.string);
+		fprintf(output, "\"%s\"%s", toml_node->value.string,
+														newline ? "\n" : "");
 		break;
 
 	case TOML_DATE: {
@@ -106,8 +109,9 @@ _toml_dump(struct toml_node *toml_node, FILE *output, int indent)
 		if (toml_node->name)
 			fprintf(output, "%s = ", toml_node->name);
 
-		fprintf(output, "%d-%02d-%02dT%02d:%02d:%0dZ\n", 1900 + tm.tm_year,
-				tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+		fprintf(output, "%d-%02d-%02dT%02d:%02d:%02dZ%s", 1900 + tm.tm_year,
+				tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
+				newline ? "\n" : "");
 		break;
 	}
 
@@ -121,7 +125,7 @@ void
 toml_dump(struct toml_node *toml_root, FILE *output)
 {
 	assert(toml_root->type == TOML_ROOT);
-	_toml_dump(toml_root, output, 0);
+	_toml_dump(toml_root, output, NULL, 0, 1);
 }
 
 static void
@@ -144,7 +148,7 @@ _toml_free(struct toml_node *node)
 		struct toml_list_item *item = NULL;
 
 		list_for_each(&node->value.list, item, list)
-			_toml_free(item->node);
+			_toml_free(&item->node);
 		break;
 	}
 

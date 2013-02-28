@@ -19,7 +19,6 @@ enum toml_type {
 struct toml_node {
 	enum toml_type type;
 	char *name;
-	struct toml_node *parent;
 	union {
 		struct list_head map;
 		struct list_head list;
@@ -37,7 +36,7 @@ struct toml_keygroup_item {
 
 struct toml_list_item {
 	struct list_node list;
-	struct toml_node *node;
+	struct toml_node node;
 };
 
 int toml_init(struct toml_node **);

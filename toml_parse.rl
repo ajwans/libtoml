@@ -8,6 +8,12 @@
 #include "toml.h"
 #include <signal.h>
 
+struct toml_stack_item {
+	struct list_node list;
+	enum toml_type list_type;
+	struct toml_node *node;
+};
+
 %%{
 	machine toml;
 
@@ -21,33 +27,29 @@
 	}
 
 	action saw_key {
- 		printf("KEY = %.*s\n", namelen, ts);
 		name = strndup(ts, namelen);
 	}
 
 	action saw_int {
 		number *= sign;
 
-		struct toml_list_item *cur_list =
-							list_tail(&list_stack, struct toml_list_item, list);
-
-		printf("current list is %p\n", cur_list);
+		struct toml_stack_item *cur_list =
+						list_tail(&list_stack, struct toml_stack_item, list);
 
 		if (cur_list) {
-			if (cur_list_type && cur_list_type != TOML_INT) {
-				fprintf(stderr, "incompatible types\n");
+			if (cur_list->list_type && cur_list->list_type != TOML_INT) {
+				fprintf(stderr, "incompatible types list %d this %d line %d\n",
+									cur_list->list_type, TOML_INT, curline);
 				exit(1);
 			}
-			cur_list_type = TOML_INT;
+			cur_list->list_type = TOML_INT;
 
 			struct toml_list_item *item = malloc(sizeof(*item));
-			item->node = malloc(sizeof(*item->node));
 
-			item->node->type = TOML_INT;
-			item->node->value.integer = number;
+			item->node.type = TOML_INT;
+			item->node.value.integer = number;
 
 			list_add_tail(&cur_list->node->value.list, &item->list);
-			printf("NUMBER LIST %"PRId64"\n", item->node->value.integer);
 		} else {
 			struct toml_keygroup_item *item = malloc(sizeof(*item));
 
@@ -55,7 +57,6 @@
 			item->node.type = TOML_INT;
 			item->node.value.integer = number;
 
-			printf("NUMBER %"PRId64"\n", item->node.value.integer);
 			list_add_tail(&cur_keygroup->value.map, &item->map);
 		}
 
@@ -65,23 +66,22 @@
 	action saw_float {
 		floating *= sign;
 
-		struct toml_list_item *cur_list =
-							list_tail(&list_stack, struct toml_list_item, list);
+		struct toml_stack_item *cur_list =
+						list_tail(&list_stack, struct toml_stack_item, list);
 
 		if (cur_list) {
-			if (cur_list_type && cur_list_type != TOML_FLOAT) {
-				fprintf(stderr, "incompatible types\n");
+			if (cur_list->list_type && cur_list->list_type != TOML_FLOAT) {
+				fprintf(stderr, "incompatible types list %d this %d line %d\n",
+									cur_list->list_type, TOML_FLOAT, curline);
 				exit(1);
 			}
-			cur_list_type = TOML_FLOAT;
+			cur_list->list_type = TOML_FLOAT;
 
 			struct toml_list_item *item = malloc(sizeof(*item));
-			item->node = malloc(sizeof(*item->node));
 
-			item->node->type = TOML_FLOAT;
-			item->node->value.floating = floating;
+			item->node.type = TOML_FLOAT;
+			item->node.value.floating = floating;
 			list_add_tail(&cur_list->node->value.list, &item->list);
-			printf("FLOATING LIST %f\n", item->node->value.floating);
 		} else {
 			struct toml_keygroup_item *item = malloc(sizeof(*item));
 
@@ -89,8 +89,6 @@
 			item->node.name = name;
 			item->node.type = TOML_FLOAT;
 			item->node.value.floating = floating;
-
-			printf("FLOATING %f\n", item->node.value.floating);
 		}
 
 		fhold;
@@ -99,23 +97,22 @@
 	action saw_string {
 		*strp = 0;
 
-		struct toml_list_item *cur_list =
-							list_tail(&list_stack, struct toml_list_item, list);
+		struct toml_stack_item *cur_list =
+						list_tail(&list_stack, struct toml_stack_item, list);
 
 		if (cur_list) {
-			if (cur_list_type && cur_list_type != TOML_STRING) {
-				fprintf(stderr, "incompatible types\n");
+			if (cur_list->list_type && cur_list->list_type != TOML_STRING) {
+				fprintf(stderr, "incompatible types list %d this %d line %d\n",
+									cur_list->list_type, TOML_STRING, curline);
 				exit(1);
 			}
-			cur_list_type = TOML_STRING;
+			cur_list->list_type = TOML_STRING;
 
 			struct toml_list_item *item = malloc(sizeof(*item));
-			item->node = malloc(sizeof(*item->node));
 
-			item->node->type = TOML_STRING;
-			item->node->value.string = strdup(string);
+			item->node.type = TOML_STRING;
+			item->node.value.string = strdup(string);
 			list_add_tail(&cur_list->node->value.list, &item->list);
-			printf("STRING LIST %s\n", item->node->value.string);
 		} else {
 			struct toml_keygroup_item *item = malloc(sizeof(*item));
 
@@ -123,30 +120,26 @@
 			item->node.name = name;
 			item->node.type = TOML_STRING;
 			item->node.value.string = strdup(string);
-
-			printf("STRING '%s'\n", item->node.value.string);
 		}
 	}
 
 	action saw_date {
-		struct toml_list_item *cur_list =
-							list_tail(&list_stack, struct toml_list_item, list);
+		struct toml_stack_item *cur_list =
+						list_tail(&list_stack, struct toml_stack_item, list);
 
 		if (cur_list) {
-			if (cur_list_type && cur_list_type != TOML_DATE) {
-				fprintf(stderr, "incompatible types\n");
+			if (cur_list->list_type && cur_list->list_type != TOML_DATE) {
+				fprintf(stderr, "incompatible types list %d this %d line %d\n",
+									cur_list->list_type, TOML_DATE, curline);
 				exit(1);
 			}
-			cur_list_type = TOML_DATE;
+			cur_list->list_type = TOML_DATE;
 
 			struct toml_list_item *item = malloc(sizeof(*item));
-			item->node = malloc(sizeof(*item->node));
 
-			item->node->type = TOML_DATE;
-			item->node->value.epoch = timegm(&tm);
+			item->node.type = TOML_DATE;
+			item->node.value.epoch = timegm(&tm);
 			list_add_tail(&cur_list->node->value.list, &item->list);
-
-			printf("DATE LIST %d\n", (int)item->node->value.epoch);
 		} else {
 			struct toml_keygroup_item *item = malloc(sizeof(*item));
 
@@ -154,19 +147,11 @@
 			item->node.name = name;
 			item->node.type = TOML_DATE;
 			item->node.value.epoch = timegm(&tm);
-
-			printf("DATE %d\n", (int)item->node.value.epoch);
 		}
 	}
 
 	action start_list {
-		printf("STARTLIST\n");
-
 		struct toml_node *node;
-
-		/* we don't know the type of this list yet */
-		/* XXX insufficient, we need to stack this */
-		cur_list_type = 0;
 
 		/*
 		 * if the list stack is empty add this list to the keygroup
@@ -182,55 +167,67 @@
 			item->node.name = name;
 			node = &item->node;
 		} else {
-			struct toml_list_item *tail =
-						list_tail(&list_stack, struct toml_list_item, list);
+			struct toml_stack_item *tail =
+						list_tail(&list_stack, struct toml_stack_item, list);
 
 			struct toml_list_item *item = malloc(sizeof(*item));
-			item->node = malloc(sizeof(*item->node));
-			item->node->type = TOML_LIST;
-			list_head_init(&item->node->value.list);
+
+			item->node.type = TOML_LIST;
+			list_head_init(&item->node.value.list);
 
 			list_add_tail(&tail->node->value.list, &item->list);
-			node = item->node;
+			node = &item->node;
 		}
 
 		/* push this list onto the stack */
-		struct toml_list_item *stack_item = malloc(sizeof(*stack_item));
+		struct toml_stack_item *stack_item = malloc(sizeof(*stack_item));
 		stack_item->node = node;
+		stack_item->list_type = 0;
 		list_add_tail(&list_stack, &stack_item->list);
 	}
 
 	action end_list {
-		struct toml_list_item *tail =
-						list_tail(&list_stack, struct toml_list_item, list);
+		struct toml_stack_item *tail =
+						list_tail(&list_stack, struct toml_stack_item, list);
 
 		list_del(&tail->list);
-
-		printf("ENDLIST\n");
 	}
 
 	action saw_keygroup {
-		printf("KEYGROUP %.*s indent %d, our indent %d\n", (int)(p-ts), ts, indent, keygroup_indent);
-		
-		if (indent > keygroup_indent) {
-			/* new child key group */
-		} else {
-			/* new sibling key group */
-			cur_keygroup = cur_keygroup->parent;
-			assert(cur_keygroup->type == TOML_ROOT ||
-					cur_keygroup->type == TOML_KEYGROUP);
+		char *ancestor, *tofree, *keygroupname;
+
+		struct toml_node *place = toml_root;
+
+		tofree = keygroupname = strndup(ts, (int)(p-ts));
+
+		while ((ancestor = strsep(&keygroupname, "."))) {
+			struct toml_keygroup_item *item;
+			int found = 0;
+
+			list_for_each(&place->value.map, item, map) {
+				if (strcmp(item->node.name, ancestor) == 0) {
+					place = &item->node;
+					found = 1;
+					break;
+				}
+			}
+
+			if (found)
+				continue;
+
+			/* this is the auto-vivification */
+			item = malloc(sizeof(*item));
+			item->node.name = strdup(ancestor);
+			item->node.type = TOML_KEYGROUP;
+			list_head_init(&item->node.value.map);
+			list_add_tail(&place->value.map, &item->map);
+
+			place = &item->node;
 		}
 
-		keygroup_indent = indent;
+		free(tofree);
 
-		struct toml_keygroup_item *item = malloc(sizeof(*item));
-		item->node.name = strndup(ts, (int)(p-ts));
-		item->node.type = TOML_KEYGROUP;
-		item->node.parent = cur_keygroup;
-		list_head_init(&item->node.value.map);
-
-		list_add_tail(&cur_keygroup->value.map, &item->map);
-		cur_keygroup = &item->node;
+		cur_keygroup = place;
 	}
 
 	lines = (
@@ -240,21 +237,22 @@
 		),
 
 		# just discard everything until newline
-		comment: ( [^\n]*[\n] >{ts=p;} @{printf("COMMENT %.*s\n", (int)(p-ts), ts);} ->start ),
+		comment: ( [^\n]*[\n] @{curline++;} ->start ),
 
 		# a keygroup
 		keygroup: ( name ']' @saw_keygroup ->start ),
 
-		# the data types
-		true: ( any @{printf("TRUE\n");}			->start ),
-		false: ( any @{printf("FALSE\n");}			->start ),
+		# the boolean data type
+		true: 	( any	>{fhold;}	->start ),
+		false: 	( any 	>{fhold;}	->start ),
 
 		# String, we have to escape \0, \t, \n, \r, everything else can
 		# be prefixed with a slash and the slash just gets dropped
 		string: (
-			'"'  $saw_string		->start			|
-			[\\]					->str_escape	|
-			[^"\\]	${*strp++=fc;}	->string
+			'"'  $saw_string					->start			|
+			[\n]    ${curline++; *strp++=fc;}	->string		|
+			[\\]								->str_escape	|
+			[^"\n\\]	${*strp++=fc;}				->string
 		),
 		str_escape: (
 			"0"	${*strp++=0;}		-> string |
@@ -272,7 +270,8 @@
 		number: (
 			digit ${number *= 10; number += fc - '0';}	->number			|
 			'.'	${floating = number; dec_pos = 10;}		->fractional_part	|
-			[^0-9.]	$saw_int							-> start
+			[\n] ${curline++;} $saw_int					->start				|
+			[^0-9.]	$saw_int							->start
 		),
 
 
@@ -282,7 +281,8 @@
 			digit ${number *= 10; number += fc - '0';}	->number_or_date	|
 			'-'	${tm.tm_year = number - 1900;}			->date				|
 			'.'	${floating = number * sign; dec_pos = 10;}			->fractional_part	|
-			[\t \n,\]] $saw_int										->start
+			[\n] ${curline++;} $saw_int								->start	|
+			[\t ,\]] $saw_int										->start
 		),
 
 
@@ -321,7 +321,7 @@
 			'#'								->comment	|
 			'\n' ${ curline++; }			->list		|
 			[\t ]							->list		|
-			']'	@{printf("EMPTY LIST\n");}	->start		|
+			']'	$end_list					->start		|
 			[^#\t \n\]]	${fhold;}			->val
 		),
 
@@ -331,7 +331,8 @@
 			'\n' ${ curline++; }		->val		|
 			[\t ]						->val		|
 			'[' $start_list				->list		|
-			[^#\t \n[] ${fhold;}		->singular
+			']'	$end_list				->start		|
+			[^#\t \n[\]] ${fhold;}		->singular
 		)
 
 		# A regular key
@@ -344,8 +345,8 @@
 			'#'							->comment	|
 			'['							->keygroup	|
 			[\t ]						->text		|
-			'\n' ${ curline++; }		->start     |
-			','	@{printf("COMMA\n");}	->val		|
+			'\n' ${curline++;}			->start     |
+			','							->val		|
 			']' $end_list				->start		|
 			[^#[\t \n,\]]	${fhold;}	->key
 		)
@@ -359,7 +360,7 @@
 int
 toml_parse(struct toml_node *toml_root, char *buf, int buflen)
 {
-	int indent = 0, cs, curline;
+	int indent = 0, cs, curline = 1;
 	char *p, *pe;
 	char *ts;
 	char string[1024], *strp;
@@ -369,8 +370,6 @@ toml_parse(struct toml_node *toml_root, char *buf, int buflen)
 	char *name;
 
 	struct toml_node *cur_keygroup = toml_root;
-	int keygroup_indent = 0;
-	enum toml_type cur_list_type = 0;
 
 	struct list_head list_stack;
 	list_head_init(&list_stack);
@@ -385,7 +384,7 @@ toml_parse(struct toml_node *toml_root, char *buf, int buflen)
 	%% write exec;
 
 	if (cs == toml_error) {
-		fprintf(stderr, "PARSE_ERROR, p = '%.5s'", p);
+		fprintf(stderr, "PARSE_ERROR, line %d, p = '%.5s'", curline, p);
 		return 1;
 	}
 
