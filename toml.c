@@ -11,6 +11,8 @@
 
 #include "toml.h"
 
+typedef void (*toml_node_walker)(struct toml_node *, void *);
+
 int
 toml_init(struct toml_node **toml_root)
 {
@@ -148,9 +150,50 @@ _toml_dump(struct toml_node *toml_node, FILE *output, char *bname, int indent,
 		break;
 	}
 
+	case TOML_BOOLEAN:
+		if (toml_node->name)
+			fprintf(output, "%s = ", toml_node->name);
+		fprintf(output, "%s%s", toml_node->value.integer ? "true" : "false",
+														newline ? "\n" : "");
+		break;
+
 	default:
 		fprintf(stderr, "unknown toml type %d\n", toml_node->type);
 		/* assert(toml_node->type); */
+	}
+}
+
+static void
+_toml_walk(struct toml_node *node, toml_node_walker fn, void *ctx)
+{
+	fn(node, ctx);
+
+	switch (node->type) {
+	case TOML_ROOT:
+	case TOML_KEYGROUP: {
+		struct toml_keygroup_item *item = NULL, *next = NULL;
+
+		list_for_each_safe(&node->value.map, item, next, map)
+			_toml_walk(&item->node, fn, ctx);
+		break;
+	}
+
+	case TOML_LIST: {
+		struct toml_list_item *item = NULL, *next = NULL;
+
+		list_for_each_safe(&node->value.list, item, next, list) {
+			_toml_walk(&item->node, fn, ctx);
+			free(item);
+		}
+		break;
+	}
+
+	case TOML_STRING:
+	case TOML_INT:
+	case TOML_FLOAT:
+	case TOML_DATE:
+	case TOML_BOOLEAN:
+		break;
 	}
 }
 
@@ -158,6 +201,125 @@ void
 toml_dump(struct toml_node *toml_root, FILE *output)
 {
 	_toml_dump(toml_root, output, NULL, 0, 1);
+}
+
+static void
+_toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
+{
+	int i;
+
+	for (i = 0; i < indent - 1; i++)
+		fprintf(output, "\t");
+
+	switch (toml_node->type) {
+	case TOML_ROOT: {
+		struct toml_keygroup_item *item = NULL;
+		struct toml_keygroup_item *tail =
+			list_tail(&toml_node->value.map, struct toml_keygroup_item, map);
+
+		list_for_each(&toml_node->value.map, item, map) {
+			_toml_tojson(&item->node, output, indent);
+			if (item != tail)
+				fprintf(output, ", ");
+		}
+		break;
+	}
+
+	case TOML_KEYGROUP: {
+		struct toml_keygroup_item *item = NULL;
+		struct toml_keygroup_item *tail =
+			list_tail(&toml_node->value.map, struct toml_keygroup_item, map);
+
+		fprintf(output, "\"%s\": {\n", toml_node->name);
+		list_for_each(&toml_node->value.map, item, map) {
+			_toml_tojson(&item->node, output, indent+1);
+			if (item != tail)
+				fprintf(output, ", ");
+		}
+		fprintf(output, "}\n");
+		break;
+	}
+
+	case TOML_LIST: {
+		struct toml_list_item *item = NULL;
+		struct toml_list_item *tail =
+			list_tail(&toml_node->value.map, struct toml_list_item, list);
+
+		if (toml_node->name) {
+			fprintf(output, "\"%s\": {\n", toml_node->name);
+			fprintf(output, "\"type\" : \"array\",\n\"value\": \n");
+		}
+		fprintf(output, "[ ");
+
+		list_for_each(&toml_node->value.list, item, list) {
+			_toml_tojson(&item->node, output, indent);
+			if (item != tail)
+				fprintf(output, ", ");
+		}
+		fprintf(output, " ]\n");
+
+		break;
+	}
+
+	case TOML_INT:
+		if (toml_node->name)
+			fprintf(output, "\"%s\": ", toml_node->name);
+		fprintf(output,
+				"{ \"type\": \"integer\", \"value\": \"%"PRId64"\" }\n",
+								toml_node->value.integer);
+		break;
+
+	case TOML_FLOAT:
+		if (toml_node->name)
+			fprintf(output, "\"%s\": ", toml_node->name);
+		fprintf(output, "{ \"type\": \"float\", \"value\": \"%f\" }\n",
+								toml_node->value.floating);
+		break;
+
+	case TOML_STRING:
+		if (toml_node->name)
+			fprintf(output, "\"%s\": ", toml_node->name);
+		fprintf(output, "{\"type\": \"string\", \"value\":\"%s\" }\n",
+								toml_node->value.string);
+		break;
+
+	case TOML_DATE: {
+		struct tm tm;
+
+		if (!gmtime_r(&toml_node->value.epoch, &tm)) {
+			char buf[1024];
+			strerror_r(errno, buf, sizeof(buf));
+			fprintf(stderr, "gmtime failed: %s", buf);
+		}
+
+		if (toml_node->name)
+			fprintf(output, "\"%s\": ", toml_node->name);
+
+		fprintf(output, "{\"type\": \"date\", \"value\": \"%d-%02d-%02dT%02d:%02d:%02dZ\" }\n",
+				1900 + tm.tm_year,
+				tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+		break;
+	}
+
+	case TOML_BOOLEAN:
+		if (toml_node->name)
+			fprintf(output, "\"%s\": ", toml_node->name);
+		fprintf(output, "{ \"type\": \"boolean\", \"value\": \"%s\" }\n",
+			toml_node->value.integer ? "true" : "false");
+		break;
+
+	default:
+		fprintf(stderr, "unknown toml type %d\n", toml_node->type);
+		/* assert(toml_node->type); */
+	}
+}
+
+void
+toml_tojson(struct toml_node *toml_root, FILE *output)
+{
+	fprintf(output, "{\n");
+	_toml_tojson(toml_root, output, 1);
+	fprintf(output, "}\n");
 }
 
 static void
@@ -197,6 +359,7 @@ _toml_free(struct toml_node *node)
 	case TOML_INT:
 	case TOML_FLOAT:
 	case TOML_DATE:
+	case TOML_BOOLEAN:
 		break;
 	}
 }

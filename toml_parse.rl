@@ -26,6 +26,7 @@ toml_type_to_str(enum toml_type type)
 	CASE_ENUM_TO_STR(TOML_FLOAT);
 	CASE_ENUM_TO_STR(TOML_STRING);
 	CASE_ENUM_TO_STR(TOML_DATE);
+	CASE_ENUM_TO_STR(TOML_BOOLEAN);
 	}
 #undef CASE_ENUM_TO_STR
 	return "unknown toml type";
@@ -45,6 +46,48 @@ toml_type_to_str(enum toml_type type)
 
 	action saw_key {
 		name = strndup(ts, namelen);
+	}
+
+	action saw_bool {
+		struct toml_stack_item *cur_list =
+						list_tail(&list_stack, struct toml_stack_item, list);
+
+		if (cur_list) {
+			if (cur_list->list_type && cur_list->list_type != TOML_BOOLEAN) {
+				fprintf(stderr, "incompatible types list %s this %s line %d\n",
+						toml_type_to_str(cur_list->list_type),
+						toml_type_to_str(TOML_BOOLEAN), curline);
+				parse_error = 1;
+				fbreak;
+			}
+			cur_list->list_type = TOML_BOOLEAN;
+
+			struct toml_list_item *item = malloc(sizeof(*item));
+			if (!item) {
+				malloc_error = 1;
+				fbreak;
+			}
+
+			item->node.type = TOML_BOOLEAN;
+			item->node.value.integer = number;
+			item->node.name = NULL;
+
+			list_add_tail(&cur_list->node->value.list, &item->list);
+
+			fnext list;
+		} else {
+			struct toml_keygroup_item *item = malloc(sizeof(*item));
+			if (!item) {
+				malloc_error = 1;
+				fbreak;
+			}
+
+			item->node.name = name;
+			item->node.type = TOML_BOOLEAN;
+			item->node.value.integer = number;
+
+			list_add_tail(&cur_keygroup->value.map, &item->map);
+		}
 	}
 
 	action saw_int {
@@ -348,16 +391,16 @@ toml_type_to_str(enum toml_type type)
 		keygroup: ( name ']' @saw_keygroup ->start ),
 
 		# the boolean data type
-		true: 	( any	>{fhold;}	->start ),
-		false: 	( any 	>{fhold;}	->start ),
+		true: 	( any	>{fhold;} $saw_bool	->start ),
+		false: 	( any 	>{fhold;} $saw_bool	->start ),
 
 		# String, we have to escape \0, \t, \n, \r, everything else can
 		# be prefixed with a slash and the slash just gets dropped
 		string: (
-			'"'  $saw_string					->start			|
-			[\n]    ${curline++; *strp++=fc;}	->string		|
-			[\\]								->str_escape	|
-			[^"\n\\]	${*strp++=fc;}				->string
+			'"'  $saw_string				->start			|
+			[\n] ${curline++; *strp++=fc;}	->string		|
+			[\\]							->str_escape	|
+			[^"\n\\] ${*strp++=fc;}			->string
 		),
 		str_escape: (
 			"0"	${*strp++=0;}		-> string |
@@ -414,8 +457,8 @@ toml_type_to_str(enum toml_type type)
 
 		# Non-list value
 		singular: (
-			'true'								-> true		|
-			'false'								-> false	|
+			'true'	@{number = 1;}				-> true		|
+			'false'	@{number = 0;}				-> false	|
 			'"' ${strp = string;}				-> string	|
 			('-'|'+') ${fhold;number = 0;}		-> sign		|
 			digit ${sign = 1;fhold;number = 0;}	-> number_or_date

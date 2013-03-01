@@ -29,10 +29,10 @@ int main(int argc, char **argv)
 	struct toml_node	*toml_root;
 	void				*m;
 	struct stat			st;
-	int					ch, dump = 0;
+	int					ch, dump = 0, json = 0;
 	char				*file, *get;
 
-	while((ch = getopt(argc, argv, "t:dg:h")) != -1) {
+	while((ch = getopt(argc, argv, "t:dg:hj")) != -1) {
 		switch (ch) {
 		case 't':
 			file = optarg;
@@ -48,6 +48,11 @@ int main(int argc, char **argv)
 
 		case 'h':
 			usage(argv[0], 1, NULL);
+			break;
+
+		case 'j':
+			json = 1;
+			break;
 
 		default:
 			usage(argv[0], 1, NULL);
@@ -92,6 +97,9 @@ int main(int argc, char **argv)
 
 	if (dump)
 		toml_dump(toml_root, stdout);
+
+	if (json)
+		toml_tojson(toml_root, stdout);
 
 	if (get) {
 		struct toml_node *node = toml_get(toml_root, get);
