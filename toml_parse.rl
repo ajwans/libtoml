@@ -74,6 +74,8 @@ toml_type_to_str(enum toml_type type)
 			item->node.name = NULL;
 
 			list_add_tail(&cur_list->node->value.list, &item->list);
+
+			fnext list;
 		} else {
 			struct toml_keygroup_item *item = malloc(sizeof(*item));
 			if (!item) {
@@ -118,6 +120,8 @@ toml_type_to_str(enum toml_type type)
 			item->node.name = NULL;
 
 			list_add_tail(&cur_list->node->value.list, &item->list);
+
+			fnext list;
 		} else {
 			struct toml_keygroup_item *item = malloc(sizeof(*item));
 			if (!item) {
@@ -167,6 +171,8 @@ toml_type_to_str(enum toml_type type)
 			item->node.name = NULL;
 
 			list_add_tail(&cur_list->node->value.list, &item->list);
+
+			fnext list;
 		} else {
 			struct toml_keygroup_item *item = malloc(sizeof(*item));
 
@@ -207,6 +213,8 @@ toml_type_to_str(enum toml_type type)
 			item->node.name = NULL;
 
 			list_add_tail(&cur_list->node->value.list, &item->list);
+
+			fnext list;
 		} else {
 			struct toml_keygroup_item *item = malloc(sizeof(*item));
 			if (!item) {
@@ -276,6 +284,9 @@ toml_type_to_str(enum toml_type type)
 
 		list_del(&tail->list);
 		free(tail);
+
+		if (!list_empty(&list_stack))
+			fnext list;
 	}
 
 	action saw_keygroup {
@@ -415,8 +426,9 @@ toml_type_to_str(enum toml_type type)
 			'#'								->comment	|
 			'\n' ${ curline++; }			->list		|
 			[\t ]							->list		|
+			','								->val		|
 			']'	$end_list					->start		|
-			[^#\t \n\]]	${fhold;}			->val
+			[^#\t, \n\]] ${fhold;}			->val
 		),
 
 		# A val can be either a list or a singular value
@@ -440,7 +452,6 @@ toml_type_to_str(enum toml_type type)
 			'['							->keygroup	|
 			[\t ]						->text		|
 			'\n' ${curline++;}			->start     |
-			','							->val		|
 			']' $end_list				->start		|
 			[^#[\t \n,\]]	${fhold;}	->key
 		)
