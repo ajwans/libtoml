@@ -64,13 +64,22 @@ toml_type_to_str(enum toml_type type)
 			cur_list->list_type = TOML_INT;
 
 			struct toml_list_item *item = malloc(sizeof(*item));
+			if (!item) {
+				malloc_error = 1;
+				fbreak;
+			}
 
 			item->node.type = TOML_INT;
 			item->node.value.integer = number;
+			item->node.name = NULL;
 
 			list_add_tail(&cur_list->node->value.list, &item->list);
 		} else {
 			struct toml_keygroup_item *item = malloc(sizeof(*item));
+			if (!item) {
+				malloc_error = 1;
+				fbreak;
+			}
 
 			item->node.name = name;
 			item->node.type = TOML_INT;
@@ -99,12 +108,22 @@ toml_type_to_str(enum toml_type type)
 			cur_list->list_type = TOML_FLOAT;
 
 			struct toml_list_item *item = malloc(sizeof(*item));
+			if (!item) {
+				malloc_error = 1;
+				fbreak;
+			}
 
 			item->node.type = TOML_FLOAT;
 			item->node.value.floating = floating;
+			item->node.name = NULL;
+
 			list_add_tail(&cur_list->node->value.list, &item->list);
 		} else {
 			struct toml_keygroup_item *item = malloc(sizeof(*item));
+			if (!item) {
+				malloc_error = 1;
+				fbreak;
+			}
 
 			list_add_tail(&cur_keygroup->value.map, &item->map);
 			item->node.name = name;
@@ -133,10 +152,20 @@ toml_type_to_str(enum toml_type type)
 			cur_list->list_type = TOML_STRING;
 
 			struct toml_list_item *item = malloc(sizeof(*item));
+			if (!item) {
+				malloc_error = 1;
+				fbreak;
+			}
 
 			item->node.type = TOML_STRING;
 			item->node.value.string = malloc(len);
+			if (!item->node.value.string) {
+				malloc_error = 1;
+				fbreak;
+			}
 			memcpy(item->node.value.string, string, len);
+			item->node.name = NULL;
+
 			list_add_tail(&cur_list->node->value.list, &item->list);
 		} else {
 			struct toml_keygroup_item *item = malloc(sizeof(*item));
@@ -145,6 +174,10 @@ toml_type_to_str(enum toml_type type)
 			item->node.name = name;
 			item->node.type = TOML_STRING;
 			item->node.value.string = malloc(len);
+			if (!item->node.value.string) {
+				malloc_error = 1;
+				fbreak;
+			}
 			memcpy(item->node.value.string, string, len);
 		}
 	}
@@ -164,12 +197,22 @@ toml_type_to_str(enum toml_type type)
 			cur_list->list_type = TOML_DATE;
 
 			struct toml_list_item *item = malloc(sizeof(*item));
+			if (!item) {
+				malloc_error = 1;
+				fbreak;
+			}
 
 			item->node.type = TOML_DATE;
 			item->node.value.epoch = timegm(&tm);
+			item->node.name = NULL;
+
 			list_add_tail(&cur_list->node->value.list, &item->list);
 		} else {
 			struct toml_keygroup_item *item = malloc(sizeof(*item));
+			if (!item) {
+				malloc_error = 1;
+				fbreak;
+			}
 
 			list_add_tail(&cur_keygroup->value.map, &item->map);
 			item->node.name = name;
@@ -187,6 +230,10 @@ toml_type_to_str(enum toml_type type)
 		 */
 		if (list_empty(&list_stack)) {
 			struct toml_keygroup_item *item = malloc(sizeof(*item));
+			if (!item) {
+				malloc_error = 1;
+				fbreak;
+			}
 
 			/* first add it to the keygroup */
 			item->node.type = TOML_LIST;
@@ -199,8 +246,13 @@ toml_type_to_str(enum toml_type type)
 						list_tail(&list_stack, struct toml_stack_item, list);
 
 			struct toml_list_item *item = malloc(sizeof(*item));
+			if (!item) {
+				malloc_error = 1;
+				fbreak;
+			}
 
 			item->node.type = TOML_LIST;
+			item->node.name = NULL;
 			list_head_init(&item->node.value.list);
 
 			list_add_tail(&tail->node->value.list, &item->list);
@@ -209,6 +261,10 @@ toml_type_to_str(enum toml_type type)
 
 		/* push this list onto the stack */
 		struct toml_stack_item *stack_item = malloc(sizeof(*stack_item));
+		if (!stack_item) {
+			malloc_error = 1;
+			fbreak;
+		}
 		stack_item->node = node;
 		stack_item->list_type = 0;
 		list_add_tail(&list_stack, &stack_item->list);
@@ -219,6 +275,7 @@ toml_type_to_str(enum toml_type type)
 						list_tail(&list_stack, struct toml_stack_item, list);
 
 		list_del(&tail->list);
+		free(tail);
 	}
 
 	action saw_keygroup {
@@ -245,6 +302,10 @@ toml_type_to_str(enum toml_type type)
 
 			/* this is the auto-vivification */
 			item = malloc(sizeof(*item));
+			if (!item) {
+				malloc_error = 1;
+				fbreak;
+			}
 			item->node.name = strdup(ancestor);
 			item->node.type = TOML_KEYGROUP;
 			list_head_init(&item->node.value.map);
@@ -401,7 +462,7 @@ toml_parse(struct toml_node *toml_root, char *buf, int buflen)
 	struct tm tm;
 	double floating;
 	char *name;
-	int parse_error = 0;
+	int parse_error = 0, malloc_error = 0;
 
 	struct toml_node *cur_keygroup = toml_root;
 
@@ -416,6 +477,11 @@ toml_parse(struct toml_node *toml_root, char *buf, int buflen)
 	pe = buf + buflen;
 
 	%% write exec;
+
+	if (malloc_error) {
+		fprintf(stderr, "malloc failed, line %d\n", curline);
+		return 1;
+	}
 
 	if (cs == toml_error || parse_error) {
 		fprintf(stderr, "PARSE_ERROR, line %d, p = '%.5s'", curline, p);

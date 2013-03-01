@@ -205,4 +205,5 @@ toml_free(struct toml_node *toml_root)
 {
 	assert(toml_root->type == TOML_ROOT);
 	_toml_free(toml_root);
+	free(toml_root);
 }
