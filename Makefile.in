@@ -1,10 +1,9 @@
 SRCS := toml.c toml_parse.c
 OBJS := $(SRCS:.c=.o)
 
-CC := gcc
-CFLAGS := -Wall -Wextra -Werror -ggdb -fPIC -Wstrict-prototypes -I.			\
-		  -Wmissing-prototypes -D_FORTIFY_SOURCE=2 -Wshadow -D_GNU_SOURCE	\
-		  -I/opt/local/include
+CC := @CC@
+CFLAGS := @CFLAGS@ -I.
+LDFLAGS := @LDFLAGS@
 
 LIBNAME := toml
 
@@ -16,10 +15,10 @@ endif
 PLATFORM := $(shell uname -s)
 ifeq ($(PLATFORM),Darwin)
 	LIBEXT=dylib
-	LDFLAGS := -dynamic -dylib -lSystem -arch $(ARCH)
+	LIBFLAGS := -dynamic -dylib -lSystem -arch $(ARCH)
 else
 	LIBEXT=so
-	LDFLAGS := -Bdynamic -shared
+	LIBFLAGS := -Bdynamic -shared
 endif
 
 all: shared main
@@ -27,13 +26,13 @@ all: shared main
 shared: lib$(LIBNAME).$(LIBEXT)
 
 lib$(LIBNAME).$(LIBEXT): $(OBJS)
-	$(LD) $(LDFLAGS) $^ -o $@
+	$(LD) $(LIBFLAGS) $^ -o $@
 
 main: main.o shared
-	$(CC) $(CFLAGS) -o $@ $< -L$(PWD) -l$(LIBNAME)
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) -l$(LIBNAME)
 
 test: test.o shared
-	$(CC) $(CFLAGS) -o $@ $< -L$(PWD) -l$(LIBNAME) -L/opt/local/lib -lcunit -lncurses
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) -l$(LIBNAME) -lcunit -lncurses
 
 %.c: %.rl
 	ragel -G2 $<

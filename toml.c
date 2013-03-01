@@ -1,5 +1,3 @@
-#include "toml.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <inttypes.h>
@@ -9,6 +7,9 @@
 #include <time.h>
 #include <errno.h>
 #include <string.h>
+#include <ccan/list/list.h>
+
+#include "toml.h"
 
 int
 toml_init(struct toml_node **toml_root)
