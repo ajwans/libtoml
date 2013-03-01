@@ -89,22 +89,24 @@ _toml_dump(struct toml_node *toml_node, FILE *output, char *bname, int indent,
 															toml_node->name);
 
 		fprintf(output, "%s[%s]\n", indent ? "\t": "", name);
-		list_for_each(&toml_node->value.map, item, map) {
+		list_for_each(&toml_node->value.map, item, map)
 			_toml_dump(&item->node, output, name, indent+1, 1);
-		}
 		fprintf(output, "\n");
 		break;
 	}
 
 	case TOML_LIST: {
 		struct toml_list_item *item = NULL;
+		struct toml_list_item *tail =
+				list_tail(&toml_node->value.list, struct toml_list_item, list);
 
 		if (toml_node->name)
 			fprintf(output, "%s = ", toml_node->name);
 		fprintf(output, "[ ");
 		list_for_each(&toml_node->value.list, item, list) {
 			_toml_dump(&item->node, output, toml_node->name, 0, 0);
-			fprintf(output, ", ");
+			if (item != tail)
+				fprintf(output, ", ");
 		}
 		fprintf(output, " ]%s", newline ? "\n" : "");
 
