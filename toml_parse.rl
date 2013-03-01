@@ -495,7 +495,6 @@ toml_type_to_str(enum toml_type type)
 			'['							->keygroup	|
 			[\t ]						->text		|
 			'\n' ${curline++;}			->start     |
-			']' $end_list				->start		|
 			[^#[\t \n,\]]	${fhold;}	->key
 		)
 	);
