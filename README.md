@@ -3,7 +3,7 @@ libtoml
 
 Fast C parser using Ragel to generate the state machine.
 
-Currently targetted at toml 3f4224ecdc4a65fdd28b4fb70d46f4c0bd3700aa, with the exception of UTF8 strings.
+Currently targetted at toml b098bd2.
 
 Usage
 =====
@@ -26,5 +26,4 @@ toml_free(root);
 TODO
 ====
 
-Tests
-UTF8 support
+More tests

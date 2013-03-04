@@ -54,10 +54,10 @@ toml_type_to_str(enum toml_type type)
 
 		if (cur_list) {
 			if (cur_list->list_type && cur_list->list_type != TOML_BOOLEAN) {
-				fprintf(stderr, "incompatible types list %s this %s line %d\n",
+				asprintf(&parse_error,
+						"incompatible types list %s this %s line %d\n",
 						toml_type_to_str(cur_list->list_type),
 						toml_type_to_str(TOML_BOOLEAN), curline);
-				parse_error = 1;
 				fbreak;
 			}
 			cur_list->list_type = TOML_BOOLEAN;
@@ -98,10 +98,10 @@ toml_type_to_str(enum toml_type type)
 
 		if (cur_list) {
 			if (cur_list->list_type && cur_list->list_type != TOML_INT) {
-				fprintf(stderr, "incompatible types list %s this %s line %d\n",
+				asprintf(&parse_error,
+						"incompatible types list %s this %s line %d\n",
 						toml_type_to_str(cur_list->list_type),
 						toml_type_to_str(TOML_INT), curline);
-				parse_error = 1;
 				fbreak;
 			}
 			cur_list->list_type = TOML_INT;
@@ -144,10 +144,10 @@ toml_type_to_str(enum toml_type type)
 
 		if (cur_list) {
 			if (cur_list->list_type && cur_list->list_type != TOML_FLOAT) {
-				fprintf(stderr, "incompatible types list %s this %s line %d\n",
+				asprintf(&parse_error,
+						"incompatible types list %s this %s line %d\n",
 						toml_type_to_str(cur_list->list_type),
 						toml_type_to_str(TOML_FLOAT), curline);
-				parse_error = 1;
 				fbreak;
 			}
 			cur_list->list_type = TOML_FLOAT;
@@ -190,10 +190,10 @@ toml_type_to_str(enum toml_type type)
 
 		if (cur_list) {
 			if (cur_list->list_type && cur_list->list_type != TOML_STRING) {
-				fprintf(stderr, "incompatible types list %s this %s line %d\n",
+				asprintf(&parse_error,
+						"incompatible types list %s this %s line %d\n",
 						toml_type_to_str(cur_list->list_type),
 						toml_type_to_str(TOML_STRING), curline);
-				parse_error = 1;
 				fbreak;
 			}
 			cur_list->list_type = TOML_STRING;
@@ -237,10 +237,10 @@ toml_type_to_str(enum toml_type type)
 
 		if (cur_list) {
 			if (cur_list->list_type && cur_list->list_type != TOML_DATE) {
-				fprintf(stderr, "incompatible types list %s this %s line %d\n",
+				asprintf(&parse_error,
+						"incompatible types list %s this %s line %d\n",
 						toml_type_to_str(cur_list->list_type),
 						toml_type_to_str(TOML_DATE), curline);
-				parse_error = 1;
 				fbreak;
 			}
 			cur_list->list_type = TOML_DATE;
@@ -368,12 +368,13 @@ toml_type_to_str(enum toml_type type)
 			place = &item->node;
 		}
 
-		free(tofree);
-
 		if (place->type != TOML_KEYGROUP) {
-			parse_error = 1;
+			asprintf(&parse_error, "Attempt to overwrite keygroup %.*s",
+															(int)(p-ts), ts);
 			fbreak;
 		}
+
+		free(tofree);
 
 		cur_keygroup = place;
 	}
@@ -403,12 +404,18 @@ toml_type_to_str(enum toml_type type)
 			[^"\n\\] ${*strp++=fc;}			->string
 		),
 		str_escape: (
-			"0"	${*strp++=0;}		-> string |
-			"t"	${*strp++='\t';}	-> string |
-			"n"	${*strp++='\n';}	-> string |
-			"r"	${*strp++='\r';}	-> string |
-			[^0tnr]	${*strp++=fc;}	-> string
+			'0'	${*strp++=0;}		-> string	|
+			't'	${*strp++='\t';}	-> string	|
+			'n'	${*strp++='\n';}	-> string	|
+			'r'	${*strp++='\r';}	-> string	|
+			'x'						-> hex_byte	|
+			[^0tnrx] ${*strp++=fc;}	-> string
 		),
+		hex_byte: (
+			xdigit{2} >{hex[0]=*p;}
+				@{hex[1]=*p; *strp++=strtol(hex, NULL, 16);} -> string 
+		),
+
 
 		# A sign can optiionally prefix a number
 		sign: (
@@ -509,13 +516,15 @@ toml_parse(struct toml_node *toml_root, char *buf, int buflen)
 {
 	int indent = 0, cs, curline = 1;
 	char *p, *pe;
-	char *ts;
+	char *ts, *te;
 	char string[1024], *strp;
 	int sign, number, dec_pos, namelen;
 	struct tm tm;
 	double floating;
 	char *name;
-	int parse_error = 0, malloc_error = 0;
+	char *parse_error = NULL;
+	char hex[3] = { 0 };;
+	int malloc_error = 0;
 
 	struct toml_node *cur_keygroup = toml_root;
 
@@ -536,7 +545,13 @@ toml_parse(struct toml_node *toml_root, char *buf, int buflen)
 		return 1;
 	}
 
-	if (cs == toml_error || parse_error) {
+	if (parse_error) {
+		fprintf(stderr, "%s at %d p = %.5s\n", parse_error, curline, p);
+		free(parse_error);
+		return 1;
+	}
+
+	if (cs == toml_error) {
 		fprintf(stderr, "PARSE_ERROR, line %d, p = '%.5s'", curline, p);
 		return 1;
 	}
