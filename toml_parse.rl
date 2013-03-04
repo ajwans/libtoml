@@ -379,6 +379,13 @@ toml_type_to_str(enum toml_type type)
 		cur_keygroup = place;
 	}
 
+	action saw_comment {
+		if (!list_empty(&list_stack))
+			fnext list;
+
+		curline++;
+	}
+
 	lines = (
 		start: (
 			# count the indentation to know where the keygroups end
@@ -386,7 +393,7 @@ toml_type_to_str(enum toml_type type)
 		),
 
 		# just discard everything until newline
-		comment: ( [^\n]*[\n] @{curline++;} ->start ),
+		comment: ( [^\n]*[\n] @saw_comment ->start ),
 
 		# a keygroup
 		keygroup: ( name ']' @saw_keygroup ->start ),
@@ -476,7 +483,7 @@ toml_type_to_str(enum toml_type type)
 			'#'								->comment	|
 			'\n' ${ curline++; }			->list		|
 			[\t ]							->list		|
-			','								->val		|
+			','								->list		|
 			']'	$end_list					->start		|
 			[^#\t, \n\]] ${fhold;}			->val
 		),

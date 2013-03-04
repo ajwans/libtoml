@@ -95,6 +95,8 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
+	close(fd);
+
 	if (dump)
 		toml_dump(toml_root, stdout);
 

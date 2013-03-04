@@ -1,50 +1,64 @@
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <unistd.h>
 
 #include "CUnit/Basic.h"
 #include "toml.h"
 
-struct toml_node *root;
-
 static int
 init_toml(void)
 {
-	return toml_init(&root);
+	return 0;
 }
 
 static int
 fini_toml(void)
 {
-	toml_free(root);
 	return 0;
 }
 
 static void
 testFruit(void)
 {
-	int ret;
-	char *fruit =
+	int					ret;
+	struct toml_node	*root;
+	char				*fruit =
 				"[fruit]\ntype = \"apple\"\n\n[fruit.type]\napple = \"yes\"\n";
+
+	toml_init(&root);
 
 	ret = toml_parse(root, fruit, strlen(fruit));
 	CU_ASSERT(ret);
+
+	toml_free(root);
 }
 
 static void
 testTypes(void)
 {
-	int ret;
-	char *types = "list = [ 1, \"string\" ]\n";
+	int					ret;
+	struct toml_node	*root;
+	char				*types = "list = [ 1, \"string\" ]\n";
+
+	toml_init(&root);
 
 	ret = toml_parse(root, types, strlen(types));
 	CU_ASSERT(ret);
+
+	toml_free(root);
 }
 
 static void
 testHex(void)
 {
-	int ret;
-	struct toml_node *node;
-	char *string_with_hex = "string_with_hex = \"\\x4bfoo\"\n";
+	int					ret;
+	struct toml_node	*node;
+	struct toml_node	*root;
+	char				*string_with_hex = "string_with_hex = \"\\x4bfoo\"\n";
+
+	toml_init(&root);
 
 	ret = toml_parse(root, string_with_hex, strlen(string_with_hex));
 	CU_ASSERT(ret == 0);
@@ -54,6 +68,47 @@ testHex(void)
 	CU_ASSERT(node->type == TOML_STRING);
 
 	CU_ASSERT(strcmp(node->value.string, "Kfoo") == 0);
+
+	toml_free(root);
+}
+
+static void
+mmapAndParse(char *path)
+{
+	int					fd, ret;
+	struct toml_node	*root;
+	void				*m;
+	struct stat			st;
+
+	toml_init(&root);
+
+	fd = open(path, O_RDONLY);
+	CU_ASSERT_FATAL(fd != -1);
+
+	ret = fstat(fd, &st);
+	CU_ASSERT_FATAL(ret != -1);
+
+	m = mmap(NULL, st.st_size, PROT_READ, MAP_FILE|MAP_PRIVATE, fd, 0);
+	CU_ASSERT_FATAL(m != NULL);
+
+	ret = toml_parse(root, m, st.st_size);
+	CU_ASSERT(ret == 0);
+
+	munmap(m, st.st_size);
+	close(fd);
+	toml_free(root);
+}
+
+static void
+testExample(void)
+{
+	mmapAndParse("examples/example.toml");
+}
+
+static void
+testHardExample(void)
+{
+	mmapAndParse("examples/hard_example.toml");
 }
 
 int main(void)
@@ -74,6 +129,12 @@ int main(void)
 		goto out;
 
 	if ((NULL == CU_add_test(pSuite, "test hex", testHex)))
+		goto out;
+
+	if ((NULL == CU_add_test(pSuite, "test example", testExample)))
+		goto out;
+
+	if ((NULL == CU_add_test(pSuite, "test hard example", testHardExample)))
 		goto out;
 
 	CU_basic_set_mode(CU_BRM_VERBOSE);
