@@ -104,6 +104,7 @@ testGoodExamples(void)
 {
 	mmapAndParse("examples/example.toml", 0);
 	mmapAndParse("examples/hard_example.toml", 0);
+	mmapAndParse("examples/array_of_tables.toml", 0);
 }
 
 static void
