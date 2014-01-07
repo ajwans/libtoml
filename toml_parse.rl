@@ -410,18 +410,19 @@ toml_type_to_str(enum toml_type type)
 			[^"\n\\] ${*strp++=fc;}			->string
 		),
 		str_escape: (
-			'0'	${*strp++=0;}		-> string	|
+			'b'	${*strp++=0x8;}		-> string	|
 			't'	${*strp++='\t';}	-> string	|
 			'n'	${*strp++='\n';}	-> string	|
+			'f'	${*strp++=0xc;}		-> string	|
 			'r'	${*strp++='\r';}	-> string	|
+			'0'	${*strp++=0;}		-> string	|
 			'x'						-> hex_byte	|
-			[^0tnrx] ${*strp++=fc;}	-> string
+			[^btnfr0ux] ${*strp++=fc;}	-> string
 		),
 		hex_byte: (
 			xdigit{2} >{hex[0]=*p;}
 				@{hex[1]=*p; *strp++=strtol(hex, NULL, 16);} -> string 
 		),
-
 
 		# A sign can optiionally prefix a number
 		sign: (
