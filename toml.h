@@ -8,7 +8,7 @@
 
 enum toml_type {
 	TOML_ROOT = 1,
-	TOML_KEYGROUP,
+	TOML_TABLE,
 	TOML_LIST,
 	TOML_INT,
 	TOML_FLOAT,
@@ -30,7 +30,7 @@ struct toml_node {
 	} value;
 };
 
-struct toml_keygroup_item {
+struct toml_table_item {
 	struct list_node map;
 	struct toml_node node;
 };

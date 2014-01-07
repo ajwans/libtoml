@@ -20,7 +20,7 @@ toml_type_to_str(enum toml_type type)
 #define CASE_ENUM_TO_STR(x) case(x): return #x
 	switch (type) {
 	CASE_ENUM_TO_STR(TOML_ROOT);
-	CASE_ENUM_TO_STR(TOML_KEYGROUP);
+	CASE_ENUM_TO_STR(TOML_TABLE);
 	CASE_ENUM_TO_STR(TOML_LIST);
 	CASE_ENUM_TO_STR(TOML_INT);
 	CASE_ENUM_TO_STR(TOML_FLOAT);
@@ -76,7 +76,7 @@ toml_type_to_str(enum toml_type type)
 
 			fnext list;
 		} else {
-			struct toml_keygroup_item *item = malloc(sizeof(*item));
+			struct toml_table_item *item = malloc(sizeof(*item));
 			if (!item) {
 				malloc_error = 1;
 				fbreak;
@@ -86,7 +86,7 @@ toml_type_to_str(enum toml_type type)
 			item->node.type = TOML_BOOLEAN;
 			item->node.value.integer = number;
 
-			list_add_tail(&cur_keygroup->value.map, &item->map);
+			list_add_tail(&cur_table->value.map, &item->map);
 		}
 	}
 
@@ -120,7 +120,7 @@ toml_type_to_str(enum toml_type type)
 
 			fnext list;
 		} else {
-			struct toml_keygroup_item *item = malloc(sizeof(*item));
+			struct toml_table_item *item = malloc(sizeof(*item));
 			if (!item) {
 				malloc_error = 1;
 				fbreak;
@@ -130,7 +130,7 @@ toml_type_to_str(enum toml_type type)
 			item->node.type = TOML_INT;
 			item->node.value.integer = number;
 
-			list_add_tail(&cur_keygroup->value.map, &item->map);
+			list_add_tail(&cur_table->value.map, &item->map);
 		}
 
 		fhold;
@@ -166,13 +166,13 @@ toml_type_to_str(enum toml_type type)
 
 			fnext list;
 		} else {
-			struct toml_keygroup_item *item = malloc(sizeof(*item));
+			struct toml_table_item *item = malloc(sizeof(*item));
 			if (!item) {
 				malloc_error = 1;
 				fbreak;
 			}
 
-			list_add_tail(&cur_keygroup->value.map, &item->map);
+			list_add_tail(&cur_table->value.map, &item->map);
 			item->node.name = name;
 			item->node.type = TOML_FLOAT;
 			item->node.value.floating = floating;
@@ -217,9 +217,9 @@ toml_type_to_str(enum toml_type type)
 
 			fnext list;
 		} else {
-			struct toml_keygroup_item *item = malloc(sizeof(*item));
+			struct toml_table_item *item = malloc(sizeof(*item));
 
-			list_add_tail(&cur_keygroup->value.map, &item->map);
+			list_add_tail(&cur_table->value.map, &item->map);
 			item->node.name = name;
 			item->node.type = TOML_STRING;
 			item->node.value.string = malloc(len);
@@ -259,13 +259,13 @@ toml_type_to_str(enum toml_type type)
 
 			fnext list;
 		} else {
-			struct toml_keygroup_item *item = malloc(sizeof(*item));
+			struct toml_table_item *item = malloc(sizeof(*item));
 			if (!item) {
 				malloc_error = 1;
 				fbreak;
 			}
 
-			list_add_tail(&cur_keygroup->value.map, &item->map);
+			list_add_tail(&cur_table->value.map, &item->map);
 			item->node.name = name;
 			item->node.type = TOML_DATE;
 			item->node.value.epoch = timegm(&tm);
@@ -276,20 +276,20 @@ toml_type_to_str(enum toml_type type)
 		struct toml_node *node;
 
 		/*
-		 * if the list stack is empty add this list to the keygroup
+		 * if the list stack is empty add this list to the table
 		 * otherwise it should be added the to list on top of the stack
 		 */
 		if (list_empty(&list_stack)) {
-			struct toml_keygroup_item *item = malloc(sizeof(*item));
+			struct toml_table_item *item = malloc(sizeof(*item));
 			if (!item) {
 				malloc_error = 1;
 				fbreak;
 			}
 
-			/* first add it to the keygroup */
+			/* first add it to the table */
 			item->node.type = TOML_LIST;
 			list_head_init(&item->node.value.list);
-			list_add_tail(&cur_keygroup->value.map, &item->map);
+			list_add_tail(&cur_table->value.map, &item->map);
 			item->node.name = name;
 			node = &item->node;
 		} else {
@@ -332,15 +332,15 @@ toml_type_to_str(enum toml_type type)
 			fnext list;
 	}
 
-	action saw_keygroup {
-		char *ancestor, *tofree, *keygroupname;
+	action saw_table {
+		char *ancestor, *tofree, *tablename;
 
 		struct toml_node *place = toml_root;
 
-		tofree = keygroupname = strndup(ts, (int)(p-ts));
+		tofree = tablename = strndup(ts, (int)(p-ts));
 
-		while ((ancestor = strsep(&keygroupname, "."))) {
-			struct toml_keygroup_item *item;
+		while ((ancestor = strsep(&tablename, "."))) {
+			struct toml_table_item *item;
 			int found = 0;
 
 			list_for_each(&place->value.map, item, map) {
@@ -361,22 +361,21 @@ toml_type_to_str(enum toml_type type)
 				fbreak;
 			}
 			item->node.name = strdup(ancestor);
-			item->node.type = TOML_KEYGROUP;
+			item->node.type = TOML_TABLE;
 			list_head_init(&item->node.value.map);
 			list_add_tail(&place->value.map, &item->map);
 
 			place = &item->node;
 		}
 
-		if (place->type != TOML_KEYGROUP) {
-			asprintf(&parse_error, "Attempt to overwrite keygroup %.*s",
+		if (place->type != TOML_TABLE) {
+			asprintf(&parse_error, "Attempt to overwrite table %.*s",
 															(int)(p-ts), ts);
 			fbreak;
 		}
 
 		free(tofree);
 
-		cur_keygroup = place;
 	}
 
 	action saw_comment {
@@ -388,15 +387,15 @@ toml_type_to_str(enum toml_type type)
 
 	lines = (
 		start: (
-			# count the indentation to know where the keygroups end
+			# count the indentation to know where the tables end
 			[\t ]* >{ indent = 0; } ${ indent++; } ->text
 		),
 
 		# just discard everything until newline
 		comment: ( [^\n]*[\n] @saw_comment ->start ),
 
-		# a keygroup
-		keygroup: ( name ']' @saw_keygroup ->start ),
+		# a table
+		table: ( name ']' @saw_table ->start ),
 
 		# the boolean data type
 		true: 	( any	>{fhold;} $saw_bool	->start ),
@@ -506,7 +505,7 @@ toml_type_to_str(enum toml_type type)
 		# Text stripped of leading whitespace
 		text: (
 			'#'							->comment	|
-			'['							->keygroup	|
+			'['							->table		|
 			[\t ]						->text		|
 			'\n' ${curline++;}			->start     |
 			[^#[\t \n,\]]	${fhold;}	->key
@@ -533,7 +532,7 @@ toml_parse(struct toml_node *toml_root, char *buf, int buflen)
 	char hex[3] = { 0 };;
 	int malloc_error = 0;
 
-	struct toml_node *cur_keygroup = toml_root;
+	struct toml_node *cur_table = toml_root;
 
 	struct list_head list_stack;
 	list_head_init(&list_stack);

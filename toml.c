@@ -40,7 +40,7 @@ toml_get(struct toml_node *toml_root, char *key)
 	tofree = name = strdup(key);
 
 	while ((ancestor = strsep(&name, "."))) {
-		struct toml_keygroup_item *item;
+		struct toml_table_item *item;
 		int found = 0;
 
 		list_for_each(&node->value.map, item, map) {
@@ -73,7 +73,7 @@ _toml_dump(struct toml_node *toml_node, FILE *output, char *bname, int indent,
 
 	switch (toml_node->type) {
 	case TOML_ROOT: {
-		struct toml_keygroup_item *item = NULL;
+		struct toml_table_item *item = NULL;
 
 		list_for_each(&toml_node->value.map, item, map) {
 			_toml_dump(&item->node, output, toml_node->name, indent, 1);
@@ -81,8 +81,8 @@ _toml_dump(struct toml_node *toml_node, FILE *output, char *bname, int indent,
 		break;
 	}
 
-	case TOML_KEYGROUP: {
-		struct toml_keygroup_item *item = NULL;
+	case TOML_TABLE: {
+		struct toml_table_item *item = NULL;
 		char name[100];
 
 		sprintf(name, "%s%s%s", bname ? bname : "", bname ? "." : "",
@@ -172,8 +172,8 @@ _toml_walk(struct toml_node *node, toml_node_walker fn, void *ctx)
 
 	switch (node->type) {
 	case TOML_ROOT:
-	case TOML_KEYGROUP: {
-		struct toml_keygroup_item *item = NULL, *next = NULL;
+	case TOML_TABLE: {
+		struct toml_table_item *item = NULL, *next = NULL;
 
 		list_for_each_safe(&node->value.map, item, next, map)
 			_toml_walk(&item->node, fn, ctx);
@@ -215,9 +215,9 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 
 	switch (toml_node->type) {
 	case TOML_ROOT: {
-		struct toml_keygroup_item *item = NULL;
-		struct toml_keygroup_item *tail =
-			list_tail(&toml_node->value.map, struct toml_keygroup_item, map);
+		struct toml_table_item *item = NULL;
+		struct toml_table_item *tail =
+			list_tail(&toml_node->value.map, struct toml_table_item, map);
 
 		list_for_each(&toml_node->value.map, item, map) {
 			_toml_tojson(&item->node, output, indent);
@@ -227,10 +227,10 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 		break;
 	}
 
-	case TOML_KEYGROUP: {
-		struct toml_keygroup_item *item = NULL;
-		struct toml_keygroup_item *tail =
-			list_tail(&toml_node->value.map, struct toml_keygroup_item, map);
+	case TOML_TABLE: {
+		struct toml_table_item *item = NULL;
+		struct toml_table_item *tail =
+			list_tail(&toml_node->value.map, struct toml_table_item, map);
 
 		fprintf(output, "\"%s\": {\n", toml_node->name);
 		list_for_each(&toml_node->value.map, item, map) {
@@ -332,8 +332,8 @@ _toml_free(struct toml_node *node)
 
 	switch (node->type) {
 	case TOML_ROOT:
-	case TOML_KEYGROUP: {
-		struct toml_keygroup_item *item = NULL, *next = NULL;
+	case TOML_TABLE: {
+		struct toml_table_item *item = NULL, *next = NULL;
 
 		list_for_each_safe(&node->value.map, item, next, map) {
 			list_del(&item->map);
