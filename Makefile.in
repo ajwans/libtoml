@@ -44,7 +44,7 @@ test: test.o shared
 	dot -Tpng -o$@ $<
 
 clean:
-	rm -f $(OBJS)
+	rm -f $(OBJS) main.o test.o
 	rm -f lib$(LIBNAME).$(LIBEXT)
 	rm -f toml_parse.dot
 	rm -f toml_parse.png

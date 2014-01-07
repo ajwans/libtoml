@@ -27,6 +27,7 @@ toml_type_to_str(enum toml_type type)
 	CASE_ENUM_TO_STR(TOML_STRING);
 	CASE_ENUM_TO_STR(TOML_DATE);
 	CASE_ENUM_TO_STR(TOML_BOOLEAN);
+	CASE_ENUM_TO_STR(TOML_TABLE_ARRAY);
 	}
 #undef CASE_ENUM_TO_STR
 	return "unknown toml type";
@@ -37,7 +38,7 @@ toml_type_to_str(enum toml_type type)
 
 	whitespace = [\t ]*;
 
-	name = (print - (whitespace|']'))+ >{ts = p;};
+	name = (print - (whitespace|']'|'['))+ >{ts = p;};
 
 	action float_add_place {
 		floating += (fc - '0') * ((float)1/dec_pos);
@@ -376,6 +377,74 @@ toml_type_to_str(enum toml_type type)
 
 		free(tofree);
 
+		cur_table = place;
+	}
+
+	action saw_table_array {
+		char *ancestor, *tofree, *tablename;
+
+		struct toml_node *place = toml_root;
+		struct toml_list_item *new_table_entry = NULL;
+
+		tofree = tablename = strndup(ts, (int)(p-ts-1));
+
+		while ((ancestor = strsep(&tablename, "."))) {
+			struct toml_table_item *item;
+			int found = 0;
+
+			list_for_each(&place->value.map, item, map) {
+				if (strcmp(item->node.name, ancestor) == 0) {
+					place = &item->node;
+					found = 1;
+					break;
+				}
+			}
+
+			if (found)
+				continue;
+
+			/* this is the auto-vivification */
+
+			/*
+			 * Create a table array node and insert it into the heirarchy
+			 */
+			item = malloc(sizeof(*item));
+			if (!item) {
+				malloc_error = 1;
+				fbreak;
+			}
+			item->node.name = strdup(ancestor);
+			item->node.type = TOML_TABLE_ARRAY;
+			list_head_init(&item->node.value.list);
+			list_add_tail(&place->value.map, &item->map);
+
+			place = &item->node;
+		}
+
+		if (place->type != TOML_TABLE_ARRAY) {
+			asprintf(&parse_error, "Attempt to overwrite table %.*s",
+															(int)(p-ts), ts);
+			fbreak;
+		}
+
+		free(tofree);
+
+		/*
+		 * Create a table which becomes the last element in the list
+		 * of maps (table array is a list of maps)
+		 */
+		new_table_entry = malloc(sizeof(*new_table_entry));
+		if (!new_table_entry) {
+			malloc_error = 1;
+			fbreak;
+		}
+
+		new_table_entry->node.type = TOML_TABLE;
+		new_table_entry->node.name = NULL;
+		list_head_init(&new_table_entry->node.value.map);
+		list_add_tail(&place->value.list, &new_table_entry->list);
+
+		cur_table = &new_table_entry->node;
 	}
 
 	action saw_comment {
@@ -395,7 +464,10 @@ toml_type_to_str(enum toml_type type)
 		comment: ( [^\n]*[\n] @saw_comment ->start ),
 
 		# a table
-		table: ( name ']' @saw_table ->start ),
+		table: (
+			name ']' @saw_table					->start |
+			'[' name ']' ']' @saw_table_array	->start
+			),
 
 		# the boolean data type
 		true: 	( any	>{fhold;} $saw_bool	->start ),

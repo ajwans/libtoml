@@ -15,6 +15,7 @@ enum toml_type {
 	TOML_STRING,
 	TOML_DATE,
 	TOML_BOOLEAN,
+	TOML_TABLE_ARRAY,
 };
 
 struct toml_node {

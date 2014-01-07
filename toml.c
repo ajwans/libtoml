@@ -85,10 +85,11 @@ _toml_dump(struct toml_node *toml_node, FILE *output, char *bname, int indent,
 		struct toml_table_item *item = NULL;
 		char name[100];
 
-		sprintf(name, "%s%s%s", bname ? bname : "", bname ? "." : "",
+		if (toml_node->name) {
+			sprintf(name, "%s%s%s", bname ? bname : "", bname ? "." : "",
 															toml_node->name);
-
-		fprintf(output, "%s[%s]\n", indent ? "\t": "", name);
+			fprintf(output, "%s[%s]\n", indent ? "\t": "", name);
+		}
 		list_for_each(&toml_node->value.map, item, map)
 			_toml_dump(&item->node, output, name, indent+1, 1);
 		fprintf(output, "\n");
@@ -159,6 +160,19 @@ _toml_dump(struct toml_node *toml_node, FILE *output, char *bname, int indent,
 														newline ? "\n" : "");
 		break;
 
+	case TOML_TABLE_ARRAY: {
+		struct toml_list_item *item = NULL;
+		struct toml_list_item *tail =
+				list_tail(&toml_node->value.list, struct toml_list_item, list);
+
+		list_for_each(&toml_node->value.list, item, list) {
+			fprintf(output, "[[%s]]\n", toml_node->name);
+			_toml_dump(&item->node, output, toml_node->name, indent, 1);
+		}
+
+		break;
+	}
+
 	default:
 		fprintf(stderr, "unknown toml type %d\n", toml_node->type);
 		/* assert(toml_node->type); */
@@ -180,6 +194,7 @@ _toml_walk(struct toml_node *node, toml_node_walker fn, void *ctx)
 		break;
 	}
 
+	case TOML_TABLE_ARRAY:
 	case TOML_LIST: {
 		struct toml_list_item *item = NULL, *next = NULL;
 
@@ -232,7 +247,9 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 		struct toml_table_item *tail =
 			list_tail(&toml_node->value.map, struct toml_table_item, map);
 
-		fprintf(output, "\"%s\": {\n", toml_node->name);
+		if (toml_node->name)
+			fprintf(output, "\"%s\": ", toml_node->name);
+		fprintf(output, "{\n");
 		list_for_each(&toml_node->value.map, item, map) {
 			_toml_tojson(&item->node, output, indent+1);
 			if (item != tail)
@@ -297,7 +314,8 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 		if (toml_node->name)
 			fprintf(output, "\"%s\": ", toml_node->name);
 
-		fprintf(output, "{\"type\": \"date\", \"value\": \"%d-%02d-%02dT%02d:%02d:%02dZ\" }\n",
+		fprintf(output, "{\"type\": \"date\", \"value\": "
+				"\"%d-%02d-%02dT%02d:%02d:%02dZ\" }\n",
 				1900 + tm.tm_year,
 				tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
 		break;
@@ -307,8 +325,25 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 		if (toml_node->name)
 			fprintf(output, "\"%s\": ", toml_node->name);
 		fprintf(output, "{ \"type\": \"boolean\", \"value\": \"%s\" }\n",
-			toml_node->value.integer ? "true" : "false");
+								toml_node->value.integer ? "true" : "false");
 		break;
+
+	case TOML_TABLE_ARRAY: {
+		struct toml_list_item *item, *last;
+		struct toml_list_item *tail =
+			list_tail(&toml_node->value.list, struct toml_list_item, list);
+
+		fprintf(output, "\"%s\": [\n", toml_node->name);
+
+		list_for_each(&toml_node->value.list, item, list) {
+			_toml_tojson(&item->node, output, indent+1);
+			if (item != tail)
+				fprintf(output, ", ");
+		}
+
+		fprintf(output, "]");
+		break;
+	}
 
 	default:
 		fprintf(stderr, "unknown toml type %d\n", toml_node->type);
@@ -343,6 +378,7 @@ _toml_free(struct toml_node *node)
 		break;
 	}
 
+	case TOML_TABLE_ARRAY:
 	case TOML_LIST: {
 		struct toml_list_item *item = NULL, *next = NULL;
 
