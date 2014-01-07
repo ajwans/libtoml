@@ -73,7 +73,7 @@ testHex(void)
 }
 
 static void
-mmapAndParse(char *path)
+mmapAndParse(char *path, int expected)
 {
 	int					fd, ret;
 	struct toml_node	*root;
@@ -92,7 +92,7 @@ mmapAndParse(char *path)
 	CU_ASSERT_FATAL(m != NULL);
 
 	ret = toml_parse(root, m, st.st_size);
-	CU_ASSERT(ret == 0);
+	CU_ASSERT(ret == expected);
 
 	munmap(m, st.st_size);
 	close(fd);
@@ -100,15 +100,19 @@ mmapAndParse(char *path)
 }
 
 static void
-testExample(void)
+testGoodExamples(void)
 {
-	mmapAndParse("examples/example.toml");
+	mmapAndParse("examples/example.toml", 0);
+	mmapAndParse("examples/hard_example.toml", 0);
 }
 
 static void
-testHardExample(void)
+testBadExamples(void)
 {
-	mmapAndParse("examples/hard_example.toml");
+	mmapAndParse("examples/text_after_array.toml", 1);
+	mmapAndParse("examples/text_after_table.toml", 1);
+	mmapAndParse("examples/text_after_value.toml", 1);
+	mmapAndParse("examples/text_in_array.toml", 1);
 }
 
 int main(void)
@@ -131,10 +135,10 @@ int main(void)
 	if ((NULL == CU_add_test(pSuite, "test hex", testHex)))
 		goto out;
 
-	if ((NULL == CU_add_test(pSuite, "test example", testExample)))
+	if ((NULL == CU_add_test(pSuite, "test good examples", testGoodExamples)))
 		goto out;
 
-	if ((NULL == CU_add_test(pSuite, "test hard example", testHardExample)))
+	if ((NULL == CU_add_test(pSuite, "test bad examples", testBadExamples)))
 		goto out;
 
 	CU_basic_set_mode(CU_BRM_VERBOSE);
