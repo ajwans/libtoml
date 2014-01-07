@@ -41,11 +41,14 @@ struct toml_list_item {
 	struct toml_node node;
 };
 
+typedef void (*toml_node_walker)(struct toml_node *, void *);
+
 int toml_init(struct toml_node **);
 int toml_parse(struct toml_node *, char *, int);
 struct toml_node *toml_get(struct toml_node *, char *);
 void toml_dump(struct toml_node *, FILE *);
 void toml_tojson(struct toml_node *, FILE *);
 void toml_free(struct toml_node *);
+void toml_walk(struct toml_node *, toml_node_walker, void *);
 
 #endif

@@ -11,8 +11,6 @@
 
 #include "toml.h"
 
-typedef void (*toml_node_walker)(struct toml_node *, void *);
-
 int
 toml_init(struct toml_node **toml_root)
 {
@@ -200,7 +198,6 @@ _toml_walk(struct toml_node *node, toml_node_walker fn, void *ctx)
 
 		list_for_each_safe(&node->value.list, item, next, list) {
 			_toml_walk(&item->node, fn, ctx);
-			free(item);
 		}
 		break;
 	}
@@ -212,6 +209,12 @@ _toml_walk(struct toml_node *node, toml_node_walker fn, void *ctx)
 	case TOML_BOOLEAN:
 		break;
 	}
+}
+
+void
+toml_walk(struct toml_node *root, toml_node_walker fn, void *ctx)
+{
+	_toml_walk(root, fn, ctx);
 }
 
 void
