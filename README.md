@@ -3,7 +3,7 @@ libtoml
 
 Fast C parser using Ragel to generate the state machine.
 
-Currently targetted at toml 4f23be43e4 (minus UTF-8)
+Currently targetted at toml 4f23be43e4
 
 Usage
 =====
@@ -26,6 +26,8 @@ toml_free(root);
 
 Building it
 ===========
+
+Building libtoml requires ragel (the parser generator) and libicu for unicode support.
 
 ```sh
 > autoconf

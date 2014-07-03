@@ -73,6 +73,62 @@ testHex(void)
 }
 
 static void
+testUTF16(void)
+{
+	int					ret;
+	struct toml_node	*node;
+	struct toml_node	*root;
+	char*				string_with_utf16 = "string_with_utf16 = \"I'm a string. \\\"You can quote me\\\". Name\\tJos\\u00E9\\nLocation\\tSF.\"";
+	char				expected_result[] = {
+		0x49, 0x27, 0x6d, 0x20, 0x61, 0x20, 0x73, 0x74, 0x72, 0x69, 0x6e,
+		0x67, 0x2e, 0x20, 0x22, 0x59, 0x6f, 0x75, 0x20, 0x63, 0x61, 0x6e,
+		0x20, 0x71, 0x75, 0x6f, 0x74, 0x65, 0x20, 0x6d, 0x65, 0x22, 0x2e,
+		0x20, 0x4e, 0x61, 0x6d, 0x65, 0x09, 0x4a, 0x6f, 0x73, 0xc3, 0xa9,
+		0x0a, 0x4c, 0x6f, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x09, 0x53,
+		0x46, 0x2e };
+
+	toml_init(&root);
+
+	ret = toml_parse(root, string_with_utf16, strlen(string_with_utf16));
+	CU_ASSERT(ret == 0);
+
+	node = toml_get(root, "string_with_utf16");
+	CU_ASSERT(node != NULL);
+	CU_ASSERT(node->type == TOML_STRING);
+	CU_ASSERT(memcmp(node->value.string, expected_result, sizeof(expected_result)) == 0);
+
+	toml_free(root);
+}
+
+static void
+testUTF32(void)
+{
+	int					ret;
+	struct toml_node	*node;
+	struct toml_node	*root;
+	char*				string_with_utf32 = "string_with_utf32 = \"I'm a string. \\\"You can quote me\\\". Name\\tJos\\U000000E9\\nLocation\\tSF.\"";
+	char				expected_result[] = {
+		0x49, 0x27, 0x6d, 0x20, 0x61, 0x20, 0x73, 0x74, 0x72, 0x69, 0x6e,
+		0x67, 0x2e, 0x20, 0x22, 0x59, 0x6f, 0x75, 0x20, 0x63, 0x61, 0x6e,
+		0x20, 0x71, 0x75, 0x6f, 0x74, 0x65, 0x20, 0x6d, 0x65, 0x22, 0x2e,
+		0x20, 0x4e, 0x61, 0x6d, 0x65, 0x09, 0x4a, 0x6f, 0x73, 0xc3, 0xa9,
+		0x0a, 0x4c, 0x6f, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x09, 0x53,
+		0x46, 0x2e };
+
+	toml_init(&root);
+
+	ret = toml_parse(root, string_with_utf32, strlen(string_with_utf32));
+	CU_ASSERT(ret == 0);
+
+	node = toml_get(root, "string_with_utf32");
+	CU_ASSERT(node != NULL);
+	CU_ASSERT(node->type == TOML_STRING);
+	CU_ASSERT(memcmp(node->value.string, expected_result, sizeof(expected_result)) == 0);
+
+	toml_free(root);
+}
+
+static void
 mmapAndParse(char *path, int expected)
 {
 	int					fd, ret;
@@ -140,6 +196,12 @@ int main(void)
 		goto out;
 
 	if ((NULL == CU_add_test(pSuite, "test bad examples", testBadExamples)))
+		goto out;
+
+	if ((NULL == CU_add_test(pSuite, "test UTF16", testUTF16)))
+		goto out;
+
+	if ((NULL == CU_add_test(pSuite, "test UTF32", testUTF32)))
 		goto out;
 
 	CU_basic_set_mode(CU_BRM_VERBOSE);

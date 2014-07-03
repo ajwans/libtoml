@@ -8,7 +8,6 @@ AC_CHECK_PROG([RAGEL], [ragel], [yes])
 if test "x$RAGEL" != "xyes"
 then
 	AC_MSG_ERROR([ragel required to build libtoml])
-	exit 1
 fi
 
 LDFLAGS="$LDFLAGS -L."
@@ -37,6 +36,29 @@ AC_ARG_WITH(cunit, [--with-cunit=<path> cunit path for tests],
 		esac
 	]
 )
+
+AC_ARG_WITH(icu, [--with-icu=<path> icu path],
+	[
+		case "$withval" in
+		"yes")
+			;;
+		*)
+			savedCFLAGS=$CFLAGS
+			savedLDFLAGS=$LDFLAGS
+			CFLAGS="$CFLAGS -I$withval/include"
+			LDFLAGS="$LDFLAGS -L$withval/lib"
+			AC_CHECK_HEADER([unicode/ustring.h], [
+				savedCFLAGS=$CFLAGS
+				savedLDFLAGS="$LDFLAGS"
+			])
+			CFLAGS=$savedCFLAGS
+			LDFLAGS=$savedLDFLAGS
+			;;
+		esac
+	]
+)
+
+AC_CHECK_LIB([icuuc], [u_strToUTF8_53],,AC_MSG_ERROR([icu not found]))
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

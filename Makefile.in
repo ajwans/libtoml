@@ -26,7 +26,7 @@ all: shared main
 shared: lib$(LIBNAME).$(LIBEXT)
 
 lib$(LIBNAME).$(LIBEXT): $(OBJS)
-	$(LD) $(LIBFLAGS) $^ -o $@
+	$(LD) $(LIBFLAGS) $^ -o $@ $(LDFLAGS) -licuuc
 
 main: main.o shared
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) -l$(LIBNAME)

@@ -7,6 +7,7 @@
 
 #include "toml.h"
 #include <signal.h>
+#include <unicode/ustring.h>
 
 struct toml_stack_item {
 	struct list_node list;
@@ -31,6 +32,49 @@ toml_type_to_str(enum toml_type type)
 	}
 #undef CASE_ENUM_TO_STR
 	return "unknown toml type";
+}
+
+static size_t
+utf32ToUTF8(char* dst, int len, uint32_t utf32)
+{
+	if (utf32 < 0x80) {
+		if (len < 1)
+			return 0;
+
+		*dst = (uint8_t)utf32;
+		return 1;
+	}
+
+	if (utf32 < 0x000800)
+	{
+		if (len < 2)
+			return 0;
+
+		dst[0] = (uint8_t)(0xc0 | (utf32 >> 6));
+		dst[1] = (uint8_t)(0x80 | (utf32 & 0x3f));
+		return 2;
+	}
+
+	if (utf32 < 0x10000)
+	{
+		if (len < 3)
+			return 0;
+
+		dst[0] = (uint8_t)(0xE0 | (utf32 >> 12));
+		dst[1] = (uint8_t)(0x80 | ((utf32 & 0x0FC0) >> 6));
+		dst[2] = (uint8_t)(0x80 | (utf32 & 0x003F));
+		return 3;
+	}
+
+	if (len < 4)
+		return 0;
+
+	dst[0] = (uint8_t)(0xF0 | (utf32 >> 18));
+	dst[1] = (uint8_t)(0x80 | ((utf32 & 0x03F000) >> 12));
+	dst[2] = (uint8_t)(0x80 | ((utf32 & 0x000FC0) >> 6));
+	dst[3] = (uint8_t)(0x80 | (utf32 & 0x00003F));
+
+	return 4;
 }
 
 %%{
@@ -454,6 +498,35 @@ toml_type_to_str(enum toml_type type)
 		curline++;
 	}
 
+	action saw_utf16 {
+		UChar		utf16[2] = { 0 };
+		int32_t		len = sizeof(string) - (strp - string);
+		int32_t		outLen;
+		UErrorCode	err = U_ZERO_ERROR;
+		char		utf16_str[5] = { 0 };
+
+		memcpy(utf16_str, utf_start, 4);
+		*utf16 = strtoul(utf16_str, NULL, 16);
+
+		u_strToUTF8(strp, len, &outLen, utf16, 1, &err);
+		strp += outLen;
+	}
+
+	action saw_utf32 {
+		UChar		utf16[2] = { 0 };
+		uint32_t	utf32;
+		int32_t		len = sizeof(string) - (strp - string);
+		int32_t		outLen;
+		UErrorCode	err = U_ZERO_ERROR;
+		char		utf32_str[9] = { 0 };
+
+		memcpy(utf32_str, utf_start, 8);
+		utf32 = strtoul(utf32_str, NULL, 16);
+
+		outLen = utf32ToUTF8(strp, len, utf32);
+		strp += outLen;
+	}
+
 	lines = (
 		start: (
 			# count the indentation to know where the tables end
@@ -489,11 +562,19 @@ toml_type_to_str(enum toml_type type)
 			'r'	${*strp++='\r';}	-> string	|
 			'0'	${*strp++=0;}		-> string	|
 			'x'						-> hex_byte	|
-			[^btnfr0ux] ${*strp++=fc;}	-> string
+			'u'						-> unicode4	|
+			'U'						-> unicode8	|
+			[^btnfr0xuU] ${*strp++=fc;}	-> string
 		),
 		hex_byte: (
 			xdigit{2} >{hex[0]=*p;}
-				@{hex[1]=*p; *strp++=strtol(hex, NULL, 16);} -> string 
+				@{hex[1]=*p; *strp++=strtoul(hex, NULL, 16);} -> string 
+		),
+		unicode4: (
+			xdigit{4} >{utf_start=p;} @saw_utf16	-> string
+		),
+		unicode8: (
+			xdigit{8} >{utf_start=p;} @saw_utf32	-> string
 		),
 
 		# A sign can optiionally prefix a number
@@ -602,8 +683,9 @@ toml_parse(struct toml_node *toml_root, char *buf, int buflen)
 	double floating;
 	char *name;
 	char *parse_error = NULL;
-	char hex[3] = { 0 };;
+	char hex[3] = { 0 };
 	int malloc_error = 0;
+	char* utf_start;
 
 	struct toml_node *cur_table = toml_root;
 
