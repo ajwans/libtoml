@@ -7,6 +7,7 @@ AC_PROG_CC([clang cc gcc])
 AC_CHECK_PROG([RAGEL], [ragel], [yes])
 if test "x$RAGEL" != "xyes"
 then
+	AC_MSG_ERROR([ragel required to build libtoml])
 	exit 1
 fi
 
