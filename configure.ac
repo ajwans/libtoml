@@ -58,7 +58,5 @@ AC_ARG_WITH(icu, [--with-icu=<path> icu path],
 	]
 )
 
-AC_CHECK_LIB([icuuc], [u_strToUTF8_53],,AC_MSG_ERROR([icu not found]))
-
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

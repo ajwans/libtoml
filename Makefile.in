@@ -17,6 +17,7 @@ ifeq ($(PLATFORM),Darwin)
 	LIBEXT=dylib
 	LIBFLAGS := -dynamic -dylib -lSystem -arch $(ARCH)
 else
+	CFLAGS += -fPIC
 	LIBEXT=so
 	LIBFLAGS := -Bdynamic -shared
 endif
