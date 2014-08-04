@@ -49,5 +49,6 @@ clean:
 	rm -f lib$(LIBNAME).$(LIBEXT)
 	rm -f toml_parse.dot
 	rm -f toml_parse.png
+	rm -f toml_parse.c
 
 .PRECIOUS: toml_parse.c

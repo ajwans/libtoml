@@ -12,7 +12,8 @@ fi
 
 LDFLAGS="$LDFLAGS -L."
 
-AC_ARG_WITH(cunit, [--with-cunit=<path> cunit path for tests],
+AC_ARG_WITH(cunit,
+	AS_HELP_STRING([--with-cunit=<path>], [cunit path for tests]),
 	[
 		case "$withval" in
 		"yes")
@@ -37,7 +38,8 @@ AC_ARG_WITH(cunit, [--with-cunit=<path> cunit path for tests],
 	]
 )
 
-AC_ARG_WITH(icu, [--with-icu=<path> icu path],
+AC_ARG_WITH(icu,
+	AS_HELP_STRING([--with-icu=<path>], [path to icu installation]),
 	[
 		case "$withval" in
 		"yes")
