@@ -251,12 +251,13 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			}
 
 			item->node.type = TOML_STRING;
-			item->node.value.string = malloc(len);
+			item->node.value.string = malloc(len+1);
 			if (!item->node.value.string) {
 				malloc_error = 1;
 				fbreak;
 			}
 			memcpy(item->node.value.string, string, len);
+			item->node.value.string[len] = '\0';
 			item->node.name = NULL;
 
 			list_add_tail(&cur_list->node->value.list, &item->list);
@@ -268,12 +269,13 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			list_add_tail(&cur_table->value.map, &item->map);
 			item->node.name = name;
 			item->node.type = TOML_STRING;
-			item->node.value.string = malloc(len);
+			item->node.value.string = malloc(len+1);
 			if (!item->node.value.string) {
 				malloc_error = 1;
 				fbreak;
 			}
 			memcpy(item->node.value.string, string, len);
+			item->node.value.string[len] = '\0';
 		}
 	}
 
