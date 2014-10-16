@@ -386,7 +386,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 		tofree = tablename = strndup(ts, (int)(p-ts));
 
 		while ((ancestor = strsep(&tablename, "."))) {
-			struct toml_table_item *item;
+			struct toml_table_item *item = NULL;
 			int found = 0;
 
 			list_for_each(&place->value.map, item, map) {
@@ -434,7 +434,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 		tofree = tablename = strndup(ts, (int)(p-ts-1));
 
 		while ((ancestor = strsep(&tablename, "."))) {
-			struct toml_table_item *item;
+			struct toml_table_item *item = NULL;
 			int found = 0;
 
 			list_for_each(&place->value.map, item, map) {
@@ -515,11 +515,9 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 	}
 
 	action saw_utf32 {
-		UChar		utf16[2] = { 0 };
 		uint32_t	utf32;
 		int32_t		len = sizeof(string) - (strp - string);
 		int32_t		outLen;
-		UErrorCode	err = U_ZERO_ERROR;
 		char		utf32_str[9] = { 0 };
 
 		memcpy(utf32_str, utf_start, 8);

@@ -2,7 +2,7 @@ SRCS := toml.c toml_parse.c
 OBJS := $(SRCS:.c=.o)
 
 CC := @CC@
-CFLAGS := @CFLAGS@ -O0 -I.
+CFLAGS := @CFLAGS@ -Wall -O0 -I.
 LDFLAGS := @LDFLAGS@
 
 LIBNAME := toml

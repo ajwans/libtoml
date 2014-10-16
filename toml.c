@@ -38,7 +38,7 @@ toml_get(struct toml_node *toml_root, char *key)
 	tofree = name = strdup(key);
 
 	while ((ancestor = strsep(&name, "."))) {
-		struct toml_table_item *item;
+		struct toml_table_item *item = NULL;
 		int found = 0;
 
 		list_for_each(&node->value.map, item, map) {
@@ -160,8 +160,6 @@ _toml_dump(struct toml_node *toml_node, FILE *output, char *bname, int indent,
 
 	case TOML_TABLE_ARRAY: {
 		struct toml_list_item *item = NULL;
-		struct toml_list_item *tail =
-				list_tail(&toml_node->value.list, struct toml_list_item, list);
 
 		list_for_each(&toml_node->value.list, item, list) {
 			fprintf(output, "[[%s]]\n", toml_node->name);
@@ -332,7 +330,7 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 		break;
 
 	case TOML_TABLE_ARRAY: {
-		struct toml_list_item *item, *last;
+		struct toml_list_item *item = NULL;
 		struct toml_list_item *tail =
 			list_tail(&toml_node->value.list, struct toml_list_item, list);
 
