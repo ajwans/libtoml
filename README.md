@@ -3,7 +3,7 @@ libtoml
 
 Fast C parser using Ragel to generate the state machine.
 
-Currently targetted at toml 4f23be43e4
+Currently targetted at TOML v0.2.0
 
 Usage
 =====

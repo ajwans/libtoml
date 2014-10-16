@@ -36,10 +36,10 @@ test: test.o shared
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) -l$(LIBNAME) -lcunit -lncurses
 
 %.c: %.rl
-	ragel -G2 $<
+	ragel $<
 
 %.dot: %.rl
-	ragel -G2 -V $< > $@
+	ragel -V $< > $@
 
 %.png: %.dot
 	dot -Tpng -o$@ $<

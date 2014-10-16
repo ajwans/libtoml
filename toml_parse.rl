@@ -228,7 +228,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 	}
 
 	action saw_string {
-		int len = strp - string;
+		int len = strp - string + 1;
 		*strp = 0;
 
 		struct toml_stack_item *cur_list =
@@ -511,6 +511,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 
 		u_strToUTF8(strp, len, &outLen, utf16, 1, &err);
 		strp += outLen;
+		fret;
 	}
 
 	action saw_utf32 {
@@ -526,6 +527,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 
 		outLen = utf32ToUTF8(strp, len, utf32);
 		strp += outLen;
+		fret;
 	}
 
 	lines = (
@@ -539,43 +541,90 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 
 		# a table
 		table: (
-			name ']' @saw_table					->start |
+			name ']' @saw_table					->start	|
 			'[' name ']' ']' @saw_table_array	->start
 			),
 
 		# the boolean data type
-		true: 	( any	>{fhold;} $saw_bool	->start ),
-		false: 	( any 	>{fhold;} $saw_bool	->start ),
+		true:	( any	>{fhold;} $saw_bool	->start ),
+		false:	( any 	>{fhold;} $saw_bool	->start ),
+
+		basic_string: (
+			["]					-> basic_empty_or_multi_line	|
+			[^"] ${fhold;}		-> basic_string_contents
+		),
+
+		basic_empty_or_multi_line: (
+			["]					-> basic_multi_line_start	|
+			[^"] $saw_string	-> start
+		),
+
+		basic_multi_line_start: (
+			'\n' ${curline++;}	-> basic_multi_line |
+			[^\n] ${fhold;}		-> basic_multi_line
+		),
+
+		basic_multi_line: (
+			["]										-> basic_multi_line_quote	|
+			[\n]		${curline++;*strp++=fc;}	-> basic_multi_line			|
+			[\\]									-> basic_multi_line_escape	|
+			[^"\n\\]	${*strp++=fc;}				-> basic_multi_line
+		),
+
+		basic_multi_line_escape: (
+			[\n]	${curline++;}			-> basic_multi_line_rm_ws	|
+			[^\n]	${fcall str_escape;}	-> basic_multi_line
+		),
+
+		basic_multi_line_rm_ws: (
+			[\n]	${curline++;}	-> basic_multi_line_rm_ws |
+			[ \t]					-> basic_multi_line_rm_ws |
+			[^ \t\n]	${fhold;}	-> basic_multi_line
+		),
+
+		basic_multi_line_quote: (
+			["]								-> basic_multi_line_quote_2	|
+			[^"]	${fhold;*strp++='"';}	-> basic_multi_line
+		),
+
+		basic_multi_line_quote_2: (
+			["]		$saw_string							-> start |
+			[^"]	${fhold;*strp++='"';*strp++='"';}	-> basic_multi_line
+		),
 
 		# String, we have to escape \0, \t, \n, \r, everything else can
 		# be prefixed with a slash and the slash just gets dropped
-		string: (
-			'"'  $saw_string				->start			|
-			[\n] ${curline++; *strp++=fc;}	->string		|
-			[\\]							->str_escape	|
-			[^"\n\\] ${*strp++=fc;}			->string
+		basic_string_contents: (
+			'"'			$saw_string					-> start					|
+			[\n]		${curline++; *strp++=fc;}	-> basic_string_contents	|
+			[\\]		${fcall str_escape;}		-> basic_string_contents	|
+			[^"\n\\]	${*strp++=fc;}				-> basic_string_contents
 		),
+
 		str_escape: (
-			'b'	${*strp++=0x8;}		-> string	|
-			't'	${*strp++='\t';}	-> string	|
-			'n'	${*strp++='\n';}	-> string	|
-			'f'	${*strp++=0xc;}		-> string	|
-			'r'	${*strp++='\r';}	-> string	|
-			'0'	${*strp++=0;}		-> string	|
-			'x'						-> hex_byte	|
-			'u'						-> unicode4	|
-			'U'						-> unicode8	|
-			[^btnfr0xuU] ${*strp++=fc;}	-> string
+			'b'	${*strp++=0x8;}			${fret;}	|
+			't'	${*strp++='\t';}		${fret;}	|
+			'n'	${*strp++='\n';}		${fret;}	|
+			'f'	${*strp++=0xc;}			${fret;}	|
+			'r'	${*strp++='\r';}		${fret;}	|
+			'0'	${*strp++=0;}			${fret;}	|
+			'x'							-> hex_byte	|
+			'u'							-> unicode4	|
+			'U'							-> unicode8	|
+			[^btnfr0xuU] ${*strp++=fc;}	${fret;}
 		),
+
 		hex_byte: (
 			xdigit{2} >{hex[0]=*p;}
-				@{hex[1]=*p; *strp++=strtoul(hex, NULL, 16);} -> string 
+				@{hex[1]=*p; *strp++=strtoul(hex, NULL, 16); fret;}
 		),
+
 		unicode4: (
-			xdigit{4} >{utf_start=p;} @saw_utf16	-> string
+			xdigit{4} >{utf_start=p;} @saw_utf16
 		),
+
 		unicode8: (
-			xdigit{8} >{utf_start=p;} @saw_utf32	-> string
+			xdigit{8} >{utf_start=p;} @saw_utf32
 		),
 
 		# A sign can optiionally prefix a number
@@ -590,7 +639,6 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			[^0-9.]	$saw_int							->start
 		),
 
-
 		# When we don't know yet if this is going to be a date or a number
 		# this is the state
 		number_or_date: (
@@ -600,7 +648,6 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			[\n] ${curline++;} $saw_int								->start	|
 			[\t ,\]] $saw_int										->start
 		),
-
 
 		# Fractional part of a double
 		fractional_part: (
@@ -623,12 +670,52 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			'Z' @saw_date ->start
 		),
 
+		literal_string: (
+			[']					-> literal_empty_or_multi_line		|
+			[^']	${fhold;}	-> literal_string_contents
+		),
+
+		literal_string_contents: (
+			[']		$saw_string		->start						|
+			[^']	${*strp++=fc;}	->literal_string_contents
+		),
+
+		literal_empty_or_multi_line: (
+			[']								-> literal_multi_line_start	|
+			[^']	${fhold;} $saw_string	-> start
+		),
+
+		literal_multi_line_start: (
+			'\n' ${curline++;}	-> literal_multi_line |
+			[^\n] ${fhold;}		-> literal_multi_line
+		),
+
+		literal_multi_line: (
+			[']									-> literal_multi_line_quote	|
+			[\n]	${curline++;*strp++=fc;}	-> literal_multi_line		|
+			[^'\n]	${*strp++=fc;}				-> literal_multi_line
+		),
+
+		# saw 1 quote, if there's not another one go back to literalMultiLine
+		literal_multi_line_quote: (
+			[']									-> literal_multi_line_second_quote |
+			[^']	${fhold;*strp++='\'';}		-> literal_multi_line
+		),
+
+		# saw 2 quotes, if there's not another one go back to literalMultiLine
+		# if there is another then terminate the string
+		literal_multi_line_second_quote: (
+			[']		$saw_string								-> start				|
+			[^']	${fhold;*strp++='\'';*strp++='\'';}		-> literal_multi_line
+		),
+
 		# Non-list value
 		singular: (
-			'true'	@{number = 1;}				-> true		|
-			'false'	@{number = 0;}				-> false	|
-			'"' ${strp = string;}				-> string	|
-			('-'|'+') ${fhold;number = 0;}		-> sign		|
+			'true'	@{number = 1;}				-> true				|
+			'false'	@{number = 0;}				-> false			|
+			'"'		${strp = string;}			-> basic_string	|
+			[']		${strp = string;}			-> literal_string	|
+			('-'|'+') ${fhold;number = 0;}		-> sign				|
 			digit ${sign = 1;fhold;number = 0;}	-> number_or_date
 		),
 
@@ -677,7 +764,7 @@ toml_parse(struct toml_node *toml_root, char *buf, int buflen)
 {
 	int indent = 0, cs, curline = 1;
 	char *p, *pe;
-	char *ts, *te;
+	char *ts;
 	char string[1024], *strp;
 	int sign, number, dec_pos, namelen;
 	struct tm tm;
@@ -687,6 +774,7 @@ toml_parse(struct toml_node *toml_root, char *buf, int buflen)
 	char hex[3] = { 0 };
 	int malloc_error = 0;
 	char* utf_start;
+	int top = 0, stack[1024];
 
 	struct toml_node *cur_table = toml_root;
 
