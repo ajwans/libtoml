@@ -18,7 +18,11 @@ usage(char *progname, int exit_code, char *msg)
 	if (msg) {
 		fprintf(stderr, "%s\n", msg);
 	}
-	fprintf(stderr, "Usage: %s -t <toml_file> [-d] [-g <key>]\n", bname);
+	fprintf(stderr, "Usage: %s -t <toml_file> [-d] [-j] [-g <key>]\n", bname);
+	fprintf(stderr, "\t-t <toml_file>	file to parse\n");
+	fprintf(stderr, "\t-d				dump file contents\n");
+	fprintf(stderr, "\t-j				dump as JSON (default is TOML)\n");
+	fprintf(stderr, "\t-g <key>			dump file contents starting from <key>\n");
 
 	exit(exit_code);
 }
@@ -30,7 +34,8 @@ int main(int argc, char **argv)
 	void				*m;
 	struct stat			st;
 	int					ch, dump = 0, json = 0;
-	char				*file, *get;
+	char				*file, *get = NULL;
+	int					exit_code = EXIT_SUCCESS;
 
 	while((ch = getopt(argc, argv, "t:dg:hj")) != -1) {
 		switch (ch) {
@@ -69,51 +74,58 @@ int main(int argc, char **argv)
 	ret = fstat(fd, &st);
 	if (ret == -1) {
 		fprintf(stderr, "stat: %s\n", strerror(errno));
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	m = mmap(NULL, st.st_size, PROT_READ, MAP_FILE|MAP_PRIVATE, fd, 0);
 	if (!m) {
 		fprintf(stderr, "mmap: %s\n", strerror(errno));
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	ret = toml_init(&toml_root);
 	if (ret == -1) {
 		fprintf(stderr, "toml_init: %s\n", strerror(errno));
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	ret = toml_parse(toml_root, m, st.st_size);
 	if (ret) {
-		exit(1);
+		exit_code = EXIT_FAILURE;
+		goto bail;
 	}
 
 	ret = munmap(m, st.st_size);
 	if (ret) {
 		fprintf(stderr, "munmap: %s\n", strerror(errno));
-		exit(1);
+		exit_code = EXIT_FAILURE;
+		goto bail;
 	}
 
 	close(fd);
 
-	if (dump)
-		toml_dump(toml_root, stdout);
-
-	if (json)
-		toml_tojson(toml_root, stdout);
-
-	if (get) {
+	if (dump) {
+		if (json)
+			toml_tojson(toml_root, stdout);
+		else
+			toml_dump(toml_root, stdout);
+	} else if (get) {
 		struct toml_node *node = toml_get(toml_root, get);
 
 		if (!node) {
-			printf("no node '%s'\n", get);
-		} else {
-			toml_dump(node, stdout);
+			fprintf(stderr, "no node '%s'\n", get);
+			exit_code = EXIT_FAILURE;
+			goto bail;
 		}
+
+		if (json)
+			toml_tojson(node, stdout);
+		else
+			toml_dump(node, stdout);
 	}
 
+bail:
 	toml_free(toml_root);
 
-	exit(0);
+	exit(exit_code);
 }
