@@ -175,10 +175,16 @@ _toml_dump(struct toml_node *toml_node, FILE *output, char *bname, int indent,
 	}
 }
 
+enum order {
+	kOrderWalk = 1,
+	kOrderDive
+};
+
 static void
-_toml_walk(struct toml_node *node, toml_node_walker fn, void *ctx)
+_toml_process(struct toml_node *node, toml_node_walker fn, enum order order, void *ctx)
 {
-	fn(node, ctx);
+	if (order == kOrderWalk)
+		fn(node, ctx);
 
 	switch (node->type) {
 	case TOML_ROOT:
@@ -186,7 +192,7 @@ _toml_walk(struct toml_node *node, toml_node_walker fn, void *ctx)
 		struct toml_table_item *item = NULL, *next = NULL;
 
 		list_for_each_safe(&node->value.map, item, next, map)
-			_toml_walk(&item->node, fn, ctx);
+			_toml_process(&item->node, fn, order, ctx);
 		break;
 	}
 
@@ -195,7 +201,7 @@ _toml_walk(struct toml_node *node, toml_node_walker fn, void *ctx)
 		struct toml_list_item *item = NULL, *next = NULL;
 
 		list_for_each_safe(&node->value.list, item, next, list) {
-			_toml_walk(&item->node, fn, ctx);
+			_toml_process(&item->node, fn, order, ctx);
 		}
 		break;
 	}
@@ -207,12 +213,21 @@ _toml_walk(struct toml_node *node, toml_node_walker fn, void *ctx)
 	case TOML_BOOLEAN:
 		break;
 	}
+
+	if (order == kOrderDive)
+		fn(node, ctx);
 }
 
 void
 toml_walk(struct toml_node *root, toml_node_walker fn, void *ctx)
 {
-	_toml_walk(root, fn, ctx);
+	_toml_process(root, fn, kOrderWalk, ctx);
+}
+
+void
+toml_dive(struct toml_node *root, toml_node_walker fn, void *ctx)
+{
+	_toml_process(root, fn, kOrderDive, ctx);
 }
 
 void
@@ -361,7 +376,7 @@ toml_tojson(struct toml_node *toml_root, FILE *output)
 }
 
 static void
-_toml_free(struct toml_node *node)
+toml_node_walker_free(struct toml_node* node, void* ctx)
 {
 	if (node->name)
 		free(node->name);
@@ -373,7 +388,6 @@ _toml_free(struct toml_node *node)
 
 		list_for_each_safe(&node->value.map, item, next, map) {
 			list_del(&item->map);
-			_toml_free(&item->node);
 			free(item);
 		}
 		break;
@@ -385,7 +399,6 @@ _toml_free(struct toml_node *node)
 
 		list_for_each_safe(&node->value.list, item, next, list) {
 			list_del(&item->list);
-			_toml_free(&item->node);
 			free(item);
 		}
 		break;
@@ -407,6 +420,6 @@ void
 toml_free(struct toml_node *toml_root)
 {
 	assert(toml_root->type == TOML_ROOT);
-	_toml_free(toml_root);
+	toml_dive(toml_root, toml_node_walker_free, NULL);
 	free(toml_root);
 }

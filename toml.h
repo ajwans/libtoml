@@ -50,5 +50,6 @@ void toml_dump(struct toml_node *, FILE *);
 void toml_tojson(struct toml_node *, FILE *);
 void toml_free(struct toml_node *);
 void toml_walk(struct toml_node *, toml_node_walker, void *);
+void toml_dive(struct toml_node *, toml_node_walker, void *);
 
 #endif
