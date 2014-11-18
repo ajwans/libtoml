@@ -399,6 +399,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 
 	action saw_table {
 		char *ancestor, *tofree, *tablename;
+		int item_added = 0;
 
 		struct toml_node *place = toml_root;
 
@@ -431,6 +432,12 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			list_add_tail(&place->value.map, &item->map);
 
 			place = &item->node;
+			item_added = 1;
+		}
+
+		if (!item_added) {
+			asprintf(&parse_error, "Duplicate item %.*s", (int)(p-ts), ts);
+			fbreak;
 		}
 
 		if (place->type != TOML_TABLE) {
