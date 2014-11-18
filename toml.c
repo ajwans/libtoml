@@ -330,7 +330,7 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 		if (toml_node->name)
 			fprintf(output, "\"%s\": ", toml_node->name);
 
-		fprintf(output, "{\"type\": \"date\", \"value\": "
+		fprintf(output, "{\"type\": \"datetime\", \"value\": "
 				"\"%d-%02d-%02dT%02d:%02d:%02dZ\" }\n",
 				1900 + tm.tm_year,
 				tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
