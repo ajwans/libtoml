@@ -18,7 +18,7 @@ usage(char *progname, int exit_code, char *msg)
 	if (msg) {
 		fprintf(stderr, "%s\n", msg);
 	}
-	fprintf(stderr, "Usage: %s -t <toml_file> [-d] [-j] [-g <key>]\n", bname);
+	fprintf(stderr, "Usage: %s [-t <toml_file>] [-d] [-j] [-g <key>]\n", bname);
 	fprintf(stderr, "\t-t <toml_file>	file to parse\n");
 	fprintf(stderr, "\t-d				dump file contents\n");
 	fprintf(stderr, "\t-j				dump as JSON (default is TOML)\n");
@@ -29,13 +29,20 @@ usage(char *progname, int exit_code, char *msg)
 
 int main(int argc, char **argv)
 {
-	int					fd, ret;
+	int					fd, ret, toml_content_size;
 	struct toml_node	*toml_root;
-	void				*m;
+	void				*toml_content;
 	struct stat			st;
 	int					ch, dump = 0, json = 0;
-	char				*file, *get = NULL;
+	char				*file = NULL, *get = NULL;
 	int					exit_code = EXIT_SUCCESS;
+	char*				bname;
+		
+	bname = basename(argv[0]);
+	if (strcmp(bname, "parser_test") == 0) {
+		dump = 1;
+		json = 1;
+	}
 
 	while((ch = getopt(argc, argv, "t:dg:hj")) != -1) {
 		switch (ch) {
@@ -65,22 +72,34 @@ int main(int argc, char **argv)
 		}
 	}
 
-	fd = open(file, O_RDONLY);
-	if (fd == -1) {
-		fprintf(stderr, "open: %s\n", strerror(errno));
-		exit(1);
-	}
+	if (file) {
+		fd = open(file, O_RDONLY);
+		if (fd == -1) {
+			fprintf(stderr, "open: %s\n", strerror(errno));
+			exit(1);
+		}
 
-	ret = fstat(fd, &st);
-	if (ret == -1) {
-		fprintf(stderr, "stat: %s\n", strerror(errno));
-		exit(EXIT_FAILURE);
-	}
+		ret = fstat(fd, &st);
+		if (ret == -1) {
+			fprintf(stderr, "stat: %s\n", strerror(errno));
+			exit(EXIT_FAILURE);
+		}
 
-	m = mmap(NULL, st.st_size, PROT_READ, MAP_FILE|MAP_PRIVATE, fd, 0);
-	if (!m) {
-		fprintf(stderr, "mmap: %s\n", strerror(errno));
-		exit(EXIT_FAILURE);
+		toml_content = mmap(NULL, st.st_size, PROT_READ, MAP_FILE|MAP_PRIVATE, fd, 0);
+		if (!toml_content) {
+			fprintf(stderr, "mmap: %s\n", strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+
+		toml_content_size = st.st_size;
+	} else {
+		toml_content = malloc(1024*1024);
+		if (!toml_content) {
+			fprintf(stderr, "malloc: %s\n", strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+
+		toml_content_size = read(STDIN_FILENO, toml_content, 1024*1024);
 	}
 
 	ret = toml_init(&toml_root);
@@ -89,20 +108,22 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	ret = toml_parse(toml_root, m, st.st_size);
+	ret = toml_parse(toml_root, toml_content, toml_content_size);
 	if (ret) {
 		exit_code = EXIT_FAILURE;
 		goto bail;
 	}
 
-	ret = munmap(m, st.st_size);
-	if (ret) {
-		fprintf(stderr, "munmap: %s\n", strerror(errno));
-		exit_code = EXIT_FAILURE;
-		goto bail;
-	}
+	if (file) {
+		ret = munmap(toml_content, toml_content_size);
+		if (ret) {
+			fprintf(stderr, "munmap: %s\n", strerror(errno));
+			exit_code = EXIT_FAILURE;
+			goto bail;
+		}
 
-	close(fd);
+		close(fd);
+	}
 
 	if (dump) {
 		if (json)
