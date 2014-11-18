@@ -409,6 +409,11 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			struct toml_table_item *item = NULL;
 			int found = 0;
 
+			if (strcmp(ancestor, "") == 0) {
+				asprintf(&parse_error, "empty implicit table");
+				fbreak;
+			}
+
 			list_for_each(&place->value.map, item, map) {
 				if (strcmp(item->node.name, ancestor) == 0) {
 					place = &item->node;
