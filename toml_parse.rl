@@ -339,8 +339,16 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			item->node.name = name;
 			node = &item->node;
 		} else {
-			struct toml_stack_item *tail =
+			struct toml_stack_item* tail =
 						list_tail(&list_stack, struct toml_stack_item, list);
+
+			if (tail->list_type && tail->list_type != TOML_LIST) {
+				asprintf(&parse_error,
+						"incompatible types list %s this %s line %d\n",
+						toml_type_to_str(tail->list_type),
+						toml_type_to_str(TOML_BOOLEAN), curline);
+				fbreak;
+			}
 
 			struct toml_list_item *item = malloc(sizeof(*item));
 			if (!item) {
@@ -348,6 +356,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 				fbreak;
 			}
 
+			tail->list_type = TOML_LIST;
 			item->node.type = TOML_LIST;
 			item->node.name = NULL;
 			list_head_init(&item->node.value.list);
