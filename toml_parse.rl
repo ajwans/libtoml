@@ -91,6 +91,16 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 	}
 
 	action saw_key {
+		struct toml_table_item* item = NULL;
+		list_for_each(&cur_table->value.map, item, map) {
+			if (strncmp(item->node.name, ts, namelen) != 0)
+				continue;
+
+			asprintf(&parse_error,
+					"duplicate key %s line %d\n",
+					item->node.name, curline);
+			fbreak;
+		}
 		name = strndup(ts, namelen);
 	}
 
