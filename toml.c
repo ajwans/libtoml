@@ -340,7 +340,7 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 	case TOML_BOOLEAN:
 		if (toml_node->name)
 			fprintf(output, "\"%s\": ", toml_node->name);
-		fprintf(output, "{ \"type\": \"boolean\", \"value\": \"%s\" }\n",
+		fprintf(output, "{ \"type\": \"bool\", \"value\": \"%s\" }\n",
 								toml_node->value.integer ? "true" : "false");
 		break;
 
