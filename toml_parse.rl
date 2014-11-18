@@ -559,6 +559,11 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 		fret;
 	}
 
+	action bad_escape {
+		asprintf(&parse_error, "bad escape \\%c", *p);
+		fbreak;
+	}
+
 	lines = (
 		start: (
 			# count the indentation to know where the tables end
@@ -572,7 +577,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 		table: (
 			name ']' @saw_table					->start	|
 			'[' name ']' ']' @saw_table_array	->start
-			),
+		),
 
 		# the boolean data type
 		true:	( any	>{fhold;} $saw_bool	->start ),
@@ -637,10 +642,11 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			'f'	${*strp++=0xc;}			${fret;}	|
 			'r'	${*strp++='\r';}		${fret;}	|
 			'0'	${*strp++=0;}			${fret;}	|
+			'"'	${*strp++='"';}			${fret;}	|
 			'x'							-> hex_byte	|
 			'u'							-> unicode4	|
 			'U'							-> unicode8	|
-			[^btnfr0xuU] ${*strp++=fc;}	${fret;}
+			[^btnfr0xuU"] $bad_escape
 		),
 
 		hex_byte: (
