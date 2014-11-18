@@ -293,6 +293,9 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 		}
 		fprintf(output, " ]\n");
 
+		if (toml_node->name)
+			fprintf(output, "}\n");
+
 		break;
 	}
 
