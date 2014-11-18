@@ -643,15 +643,9 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			'r'	${*strp++='\r';}		${fret;}	|
 			'0'	${*strp++=0;}			${fret;}	|
 			'"'	${*strp++='"';}			${fret;}	|
-			'x'							-> hex_byte	|
 			'u'							-> unicode4	|
 			'U'							-> unicode8	|
 			[^btnfr0xuU"] $bad_escape
-		),
-
-		hex_byte: (
-			xdigit{2} >{hex[0]=*p;}
-				@{hex[1]=*p; *strp++=strtoul(hex, NULL, 16); fret;}
 		),
 
 		unicode4: (
@@ -806,7 +800,6 @@ toml_parse(struct toml_node *toml_root, char *buf, int buflen)
 	double floating;
 	char *name;
 	char *parse_error = NULL;
-	char hex[3] = { 0 };
 	int malloc_error = 0;
 	char* utf_start;
 	int top = 0, stack[1024];

@@ -51,28 +51,6 @@ testTypes(void)
 }
 
 static void
-testHex(void)
-{
-	int					ret;
-	struct toml_node*	node;
-	struct toml_node*	root;
-	char				*string_with_hex = "string_with_hex = \"\\x4bfoo\"\n";
-
-	toml_init(&root);
-
-	ret = toml_parse(root, string_with_hex, strlen(string_with_hex));
-	CU_ASSERT(ret == 0);
-
-	node = toml_get(root, "string_with_hex");
-	CU_ASSERT(node != NULL);
-	CU_ASSERT(node->type == TOML_STRING);
-
-	CU_ASSERT(strcmp(node->value.string, "Kfoo") == 0);
-
-	toml_free(root);
-}
-
-static void
 testUTF16(void)
 {
 	int					ret;
@@ -331,9 +309,6 @@ int main(void)
 		goto out;
 
 	if ((NULL == CU_add_test(pSuite, "test types", testTypes)))
-		goto out;
-
-	if ((NULL == CU_add_test(pSuite, "test hex", testHex)))
 		goto out;
 
 	if ((NULL == CU_add_test(pSuite, "test good examples", testGoodExamples)))
