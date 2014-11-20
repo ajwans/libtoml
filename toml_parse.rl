@@ -85,7 +85,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 
 	whitespace = [\t ]*;
 
-	name = (print - (whitespace|']'|'['|'='))+ >{ts = p;};
+	name = (print - (']'|'['|'='))+ >{ts = p;};
 
 	action saw_key {
 		struct toml_table_item* item = NULL;
@@ -98,7 +98,11 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 					item->node.name, curline);
 			fbreak;
 		}
-		name = strndup(ts, namelen);
+
+		while (ts[namelen] == ' ' || ts[namelen] == '\t')
+			namelen--;
+
+		name = strndup(ts, namelen + 1);
 	}
 
 	action saw_bool {
@@ -761,7 +765,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 
 		# A regular key
 		key: (
-			name whitespace >{namelen = (int)(p-ts);} '=' $saw_key ->val
+			name @{namelen = (int)(p-ts);} whitespace '=' $saw_key ->val
 		),
 
 		# Text stripped of leading whitespace
