@@ -85,7 +85,8 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 
 	whitespace = [\t ]*;
 
-	name = (print - (']'|'['|'='))+ >{ts = p;};
+	name = (print - ('#'|']'|'['|'='))+ >{ts = p;};
+	tablename =  (print - (']'|'['|'='))+ >{ts = p;};
 
 	action saw_key {
 		struct toml_table_item* item = NULL;
@@ -580,8 +581,8 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 
 		# a table
 		table: (
-			name ']' @saw_table					->start	|
-			'[' name ']' ']' @saw_table_array	->start
+			tablename ']' @saw_table				->start	|
+			'[' tablename ']' ']' @saw_table_array	->start
 		),
 
 		# the boolean data type
