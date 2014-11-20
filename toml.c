@@ -360,21 +360,19 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 		struct toml_list_item *tail =
 			list_tail(&toml_node->value.map, struct toml_list_item, list);
 
-		if (toml_node->name) {
-			fprintf(output, "\"%s\": {\n", toml_node->name);
-			fprintf(output, "\"type\" : \"array\",\n\"value\": \n");
-		}
-		fprintf(output, "[ ");
+		if (toml_node->name)
+			fprintf(output, "\"%s\": ", toml_node->name);
+
+		fprintf(output, "{ \"type\" : \"array\",\n\"value\": [ \n");
 
 		list_for_each(&toml_node->value.list, item, list) {
-			_toml_tojson(&item->node, output, indent);
+			_toml_tojson(&item->node, output, indent+1);
 			if (item != tail)
 				fprintf(output, ", ");
 		}
 		fprintf(output, " ]\n");
 
-		if (toml_node->name)
-			fprintf(output, "}\n");
+		fprintf(output, "}\n");
 
 		break;
 	}
