@@ -199,6 +199,11 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 		char* te = p;
 		floating = strtod(ts, &te);
 
+		if (precision == 0) {
+			asprintf(&parse_error, "bad float\n");
+			fbreak;
+		}
+
 		struct toml_stack_item *cur_list =
 						list_tail(&list_stack, struct toml_stack_item, list);
 
