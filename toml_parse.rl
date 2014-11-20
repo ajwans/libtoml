@@ -673,10 +673,10 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 		# When we don't know yet if this is going to be a date or a number
 		# this is the state
 		number_or_date: (
-			digit ${number *= 10; number += fc - '0';}	->number_or_date	|
-			'-'	${tm.tm_year = number - 1900;}			->date				|
+			digit ${number *= 10; number += fc - '0';}				->number_or_date	|
+			'-'	${tm.tm_year = number - 1900;}						->date				|
 			'.'	${floating = number * sign; dec_pos = 10;}			->fractional_part	|
-			[\n] ${curline++;} $saw_int								->start	|
+			[\n] ${curline++;} $saw_int								->start				|
 			[\t ,\]] $saw_int										->start
 		),
 
@@ -797,7 +797,8 @@ toml_parse(struct toml_node *toml_root, char *buf, int buflen)
 	char *p, *pe;
 	char *ts;
 	char string[1024], *strp;
-	int sign, number, dec_pos, namelen;
+	int sign, dec_pos, namelen;
+	int64_t number;
 	struct tm tm;
 	double floating;
 	char *name;
