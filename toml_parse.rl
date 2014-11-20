@@ -83,7 +83,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 
 	whitespace = [\t ]*;
 
-	name = (print - (whitespace|']'|'['))+ >{ts = p;};
+	name = (print - (whitespace|']'|'['|'='))+ >{ts = p;};
 
 	action float_add_place {
 		floating += (fc - '0') * ((float)1/dec_pos);
@@ -772,7 +772,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 
 		# A regular key
 		key: (
-			name  whitespace >{namelen = (int)(p-ts);} '=' $saw_key ->val
+			name whitespace >{namelen = (int)(p-ts);} '=' $saw_key ->val
 		),
 
 		# Text stripped of leading whitespace
