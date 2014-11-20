@@ -25,7 +25,10 @@ struct toml_node {
 		struct list_head map;
 		struct list_head list;
 		int64_t integer;
-		double floating;
+		struct {
+			double	value;
+			int		precision;
+		} floating;
 		char *string;
 		time_t epoch;
 	} value;

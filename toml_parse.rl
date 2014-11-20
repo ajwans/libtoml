@@ -7,6 +7,8 @@
 #include <time.h>
 
 #include "toml.h"
+
+#include <math.h>
 #include <signal.h>
 #include <unicode/ustring.h>
 
@@ -85,11 +87,6 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 
 	name = (print - (whitespace|']'|'['|'='))+ >{ts = p;};
 
-	action float_add_place {
-		floating += (fc - '0') * ((float)1/dec_pos);
-		dec_pos *= 10;
-	}
-
 	action saw_key {
 		struct toml_table_item* item = NULL;
 		list_for_each(&cur_table->value.map, item, map) {
@@ -147,7 +144,8 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 	}
 
 	action saw_int {
-		number *= sign;
+		char* te = p;
+		number = strtoll(ts, &te, 10);
 
 		struct toml_stack_item *cur_list =
 						list_tail(&list_stack, struct toml_stack_item, list);
@@ -193,7 +191,8 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 	}
 
 	action saw_float {
-		floating *= sign;
+		char* te = p;
+		floating = strtod(ts, &te);
 
 		struct toml_stack_item *cur_list =
 						list_tail(&list_stack, struct toml_stack_item, list);
@@ -215,7 +214,8 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			}
 
 			item->node.type = TOML_FLOAT;
-			item->node.value.floating = floating;
+			item->node.value.floating.value = floating;
+			item->node.value.floating.precision = precision;
 			item->node.name = NULL;
 
 			list_add_tail(&cur_list->node->value.list, &item->list);
@@ -231,7 +231,8 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			list_add_tail(&cur_table->value.map, &item->map);
 			item->node.name = name;
 			item->node.type = TOML_FLOAT;
-			item->node.value.floating = floating;
+			item->node.value.floating.value = floating;
+			item->node.value.floating.precision = precision;
 		}
 
 		fhold;
@@ -658,32 +659,20 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			xdigit{8} >{utf_start=p;} @saw_utf32
 		),
 
-		# A sign can optiionally prefix a number
-		sign: (
-			'-' ${sign = -1;}	->number |
-			'+' ${sign = 1;}	->number
-		),
-		number: (
-			digit ${number *= 10; number += fc - '0';}	->number			|
-			'.'	${floating = number; dec_pos = 10;}		->fractional_part	|
-			[\n] ${curline++;} $saw_int					->start				|
-			[^0-9.]	$saw_int							->start
-		),
-
 		# When we don't know yet if this is going to be a date or a number
 		# this is the state
 		number_or_date: (
-			digit ${number *= 10; number += fc - '0';}				->number_or_date	|
-			'-'	${tm.tm_year = number - 1900;}						->date				|
-			'.'	${floating = number * sign; dec_pos = 10;}			->fractional_part	|
-			[\n] ${curline++;} $saw_int								->start				|
-			[\t ,\]] $saw_int										->start
+			digit ${number *= 10; number += fc - '0';}	->number_or_date	|
+			'-'	${tm.tm_year = number - 1900;}			->date				|
+			'.'	>{precision = 0;}						->fractional_part	|
+			[\n] ${curline++;} $saw_int					->start				|
+			[\t ,\]] $saw_int							->start
 		),
 
 		# Fractional part of a double
 		fractional_part: (
-			[0-9] 	$float_add_place	->fractional_part |
-			[^0-9]  $saw_float			->start
+			[0-9]	${precision++;}	->fractional_part |
+			[^0-9]	$saw_float		->start
 		),
 
 		# Zulu date, we've already picked up the first four digits and the '-'
@@ -746,8 +735,8 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			'false'	@{number = 0;}				-> false			|
 			'"'		${strp = string;}			-> basic_string	|
 			[']		${strp = string;}			-> literal_string	|
-			('-'|'+') ${fhold;number = 0;}		-> sign				|
-			digit ${sign = 1;fhold;number = 0;}	-> number_or_date
+			('-'|'+') ${number = 0; ts = p;}	-> number_or_date	|
+			digit	${ts = p; number = fc-'0';}	-> number_or_date
 		),
 
 		# A list of values
@@ -765,7 +754,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			'#'							->comment	|
 			'\n' ${ curline++; }		->val		|
 			[\t ]						->val		|
-			'[' $start_list				->list		|
+			'['	$start_list				->list		|
 			']'	$end_list				->start		|
 			[^#\t \n[\]] ${fhold;}		->singular
 		)
@@ -797,7 +786,7 @@ toml_parse(struct toml_node *toml_root, char *buf, int buflen)
 	char *p, *pe;
 	char *ts;
 	char string[1024], *strp;
-	int sign, dec_pos, namelen;
+	int precision, namelen;
 	int64_t number;
 	struct tm tm;
 	double floating;

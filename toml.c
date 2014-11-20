@@ -122,8 +122,8 @@ _toml_dump(struct toml_node *toml_node, FILE *output, char *bname, int indent,
 	case TOML_FLOAT:
 		if (toml_node->name)
 			fprintf(output, "%s = ", toml_node->name);
-		fprintf(output, " %f%s", toml_node->value.floating,
-														newline ? "\n" : "");
+		fprintf(output, " %.*f%s", toml_node->value.floating.precision,
+				toml_node->value.floating.value, newline ? "\n" : "");
 		break;
 
 	case TOML_STRING:
@@ -390,8 +390,9 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 	case TOML_FLOAT:
 		if (toml_node->name)
 			fprintf(output, "\"%s\": ", toml_node->name);
-		fprintf(output, "{ \"type\": \"float\", \"value\": \"%f\" }\n",
-								toml_node->value.floating);
+		fprintf(output, "{ \"type\": \"float\", \"value\": \"%.*f\" }\n",
+								toml_node->value.floating.precision,
+								toml_node->value.floating.value);
 		break;
 
 	case TOML_STRING: {
