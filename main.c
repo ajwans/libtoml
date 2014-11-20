@@ -29,9 +29,9 @@ usage(char *progname, int exit_code, char *msg)
 
 int main(int argc, char **argv)
 {
-	int					fd, ret, toml_content_size;
+	int					fd, ret, toml_content_size = 0;
 	struct toml_node	*toml_root;
-	void				*toml_content;
+	void				*toml_content = NULL;
 	struct stat			st;
 	int					ch, dump = 0, json = 0;
 	char				*file = NULL, *get = NULL;
@@ -93,13 +93,28 @@ int main(int argc, char **argv)
 
 		toml_content_size = st.st_size;
 	} else {
-		toml_content = malloc(1024*1024);
-		if (!toml_content) {
-			fprintf(stderr, "malloc: %s\n", strerror(errno));
-			exit(EXIT_FAILURE);
+		const int size = 1024*1024;
+		int i, bytes_read;
+
+		for (i = 0; true; i++) {
+			toml_content = realloc(toml_content, size * (i+1));
+			if (!toml_content) {
+				fprintf(stderr, "realloc: %s\n", strerror(errno));
+				exit(EXIT_FAILURE);
+			}
+
+			bytes_read = read(STDIN_FILENO, &toml_content[size*i], size);
+			toml_content_size += bytes_read;
+
+			if (bytes_read < size)
+				break;
 		}
 
-		toml_content_size = read(STDIN_FILENO, toml_content, 1024*1024);
+		FILE* foo;
+		foo = fopen("/tmp/foo.txt", "w");
+		fprintf(foo, "toml content '%.*s'\n", toml_content_size, toml_content);
+		fclose(foo);
+
 	}
 
 	ret = toml_init(&toml_root);

@@ -236,6 +236,86 @@ toml_dump(struct toml_node *toml_root, FILE *output)
 	_toml_dump(toml_root, output, NULL, 0, 1);
 }
 
+static char*
+_json_string_encode(const char* string)
+{
+	char*	ret;
+	int		j = 0;
+	int		i = 0;
+
+	for (i = 0; string[i]; i++)
+	{
+		switch (string[i]) {
+		case '"':
+		case '\\':
+		case '/':
+		case '\b':
+		case '\f':
+		case '\n':
+		case '\r':
+		case '\t':
+			j++;
+
+		default:
+			break;
+		}
+	}
+
+	ret = malloc(i + j + 1);
+	for (i = 0, j = 0; string[i]; i++)
+	{
+		switch (string[i]) {
+		case '"':
+			ret[i+j++] = '\\';
+			ret[i+j] = '"';
+			break;
+
+		case '\\':
+			ret[i+j++] = '\\';
+			ret[i+j] = '\\';
+			break;
+
+		case '/':
+			ret[i+j++] = '\\';
+			ret[i+j] = '/';
+			break;
+
+		case '\b':
+			ret[i+j++] = '\\';
+			ret[i+j] = 'b';
+			break;
+
+		case '\f':
+			ret[i+j++] = '\\';
+			ret[i+j] = 'f';
+			break;
+
+		case '\n':
+			ret[i+j++] = '\\';
+			ret[i+j] = 'n';
+			break;
+
+		case '\r':
+			ret[i+j++] = '\\';
+			ret[i+j] = 'r';
+			break;
+
+		case '\t':
+			ret[i+j++] = '\\';
+			ret[i+j] = 't';
+			break;
+
+		default:
+			ret[i+j] = string[i];
+			break;
+		}
+	}
+
+	ret[i+j] = 0;
+
+	return ret;
+}
+
 static void
 _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 {
@@ -314,12 +394,17 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 								toml_node->value.floating);
 		break;
 
-	case TOML_STRING:
+	case TOML_STRING: {
+		char* json_string;
+
 		if (toml_node->name)
 			fprintf(output, "\"%s\": ", toml_node->name);
-		fprintf(output, "{\"type\": \"string\", \"value\":\"%s\" }\n",
-								toml_node->value.string);
+
+		json_string = _json_string_encode(toml_node->value.string);
+		fprintf(output, "{\"type\": \"string\", \"value\":\"%s\" }\n", json_string);
+		free(json_string);
 		break;
+	}
 
 	case TOML_DATE: {
 		struct tm tm;

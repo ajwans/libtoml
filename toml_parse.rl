@@ -643,9 +643,11 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			'r'	${*strp++='\r';}		${fret;}	|
 			'0'	${*strp++=0;}			${fret;}	|
 			'"'	${*strp++='"';}			${fret;}	|
+			'/'	${*strp++='/';}			${fret;}	|
+			'\\'	${*strp++='\\';}			${fret;}	|
 			'u'							-> unicode4	|
 			'U'							-> unicode8	|
-			[^btnfr0xuU"] $bad_escape
+			[^btnfr0uU"/\\] $bad_escape
 		),
 
 		unicode4: (
