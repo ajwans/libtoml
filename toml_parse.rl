@@ -480,6 +480,9 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			int found = 0;
 
 			list_for_each(&place->value.map, item, map) {
+				if (!item->node.name)
+					continue;
+				
 				if (strcmp(item->node.name, ancestor) == 0) {
 					place = &item->node;
 					found = 1;
@@ -538,7 +541,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 		if (!list_empty(&list_stack))
 			fnext list;
 
-		curline++;
+		fhold;
 	}
 
 	action saw_utf16 {
@@ -578,30 +581,31 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 	lines = (
 		start: (
 			# count the indentation to know where the tables end
-			[\t ]* >{ indent = 0; } ${ indent++; } ->text
+			[\t ]*	>{indent = 0;} ${ indent++; } %{in_text=1;}	->text |
+			[\n]	${curline++;}								->start
 		),
 
 		# just discard everything until newline
-		comment: ( [^\n]*[\n] @saw_comment ->start ),
+		comment: ( [^\n]*[\n] @saw_comment @{in_text=0;}	->start ),
 
 		# a table
 		table: (
-			tablename ']' @saw_table				->start	|
-			'[' tablename ']' ']' @saw_table_array	->start
+			tablename ']' @saw_table @{in_text=0;}					->start	|
+			'[' tablename ']' ']' @saw_table_array @{in_text=0;}	->start
 		),
 
 		# the boolean data type
-		true:	( any	>{fhold;} $saw_bool	->start ),
-		false:	( any 	>{fhold;} $saw_bool	->start ),
+		true:	( any	>{fhold;} $saw_bool	@{in_text=0;}	->start ),
+		false:	( any 	>{fhold;} $saw_bool	@{in_text=0;}	->start ),
 
 		basic_string: (
-			["]					-> basic_empty_or_multi_line	|
-			[^"] ${fhold;}		-> basic_string_contents
+			["]				-> basic_empty_or_multi_line	|
+			[^"] ${fhold;}	-> basic_string_contents
 		),
 
 		basic_empty_or_multi_line: (
-			["]					-> basic_multi_line_start	|
-			[^"] $saw_string	-> start
+			["]											-> basic_multi_line_start	|
+			[^"] $saw_string ${fhold;} @{in_text=0;}	-> start
 		),
 
 		basic_multi_line_start: (
@@ -633,14 +637,14 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 		),
 
 		basic_multi_line_quote_2: (
-			["]		$saw_string							-> start |
+			["]		$saw_string @{in_text=0;}			-> start |
 			[^"]	${fhold;*strp++='"';*strp++='"';}	-> basic_multi_line
 		),
 
 		# String, we have to escape \0, \t, \n, \r, everything else can
 		# be prefixed with a slash and the slash just gets dropped
 		basic_string_contents: (
-			'"'			$saw_string					-> start					|
+			'"'			$saw_string @{in_text=0;}	-> start					|
 			[\n]		${curline++; *strp++=fc;}	-> basic_string_contents	|
 			[\\]		${fcall str_escape;}		-> basic_string_contents	|
 			[^"\n\\]	${*strp++=fc;}				-> basic_string_contents
@@ -655,7 +659,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			'0'	${*strp++=0;}			${fret;}	|
 			'"'	${*strp++='"';}			${fret;}	|
 			'/'	${*strp++='/';}			${fret;}	|
-			'\\'	${*strp++='\\';}			${fret;}	|
+			'\\'	${*strp++='\\';}	${fret;}	|
 			'u'							-> unicode4	|
 			'U'							-> unicode8	|
 			[^btnfr0uU"/\\] $bad_escape
@@ -675,14 +679,14 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			digit ${number *= 10; number += fc - '0';}	->number_or_date	|
 			'-'	${tm.tm_year = number - 1900;}			->date				|
 			'.'	>{precision = 0;}						->fractional_part	|
-			[\n] ${curline++;} $saw_int					->start				|
-			[\t ,\]] $saw_int							->start
+			[\n] ${curline++;} $saw_int @{in_text=0;}	->start				|
+			[\t ,\]] $saw_int @{in_text=0;}				->start
 		),
 
 		# Fractional part of a double
 		fractional_part: (
-			[0-9]	${precision++;}	->fractional_part |
-			[^0-9]	$saw_float		->start
+			[0-9]	${precision++;}					->fractional_part |
+			[^0-9]	$saw_float @{in_text=0;}		->start
 		),
 
 		# Zulu date, we've already picked up the first four digits and the '-'
@@ -697,7 +701,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			digit{2} @{tm.tm_min = atoi(fpc-1);}
 			':'
 			digit{2} @{tm.tm_sec = atoi(fpc-1);}
-			'Z' @saw_date ->start
+			'Z' @saw_date @{in_text=0;}	->start
 		),
 
 		literal_string: (
@@ -706,13 +710,13 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 		),
 
 		literal_string_contents: (
-			[']		$saw_string		->start						|
-			[^']	${*strp++=fc;}	->literal_string_contents
+			[']		$saw_string @{in_text=0;}	->start						|
+			[^']	${*strp++=fc;}				->literal_string_contents
 		),
 
 		literal_empty_or_multi_line: (
-			[']								-> literal_multi_line_start	|
-			[^']	${fhold;} $saw_string	-> start
+			[']											-> literal_multi_line_start	|
+			[^']	${fhold;} $saw_string @{in_text=0;}	-> start
 		),
 
 		literal_multi_line_start: (
@@ -735,7 +739,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 		# saw 2 quotes, if there's not another one go back to literalMultiLine
 		# if there is another then terminate the string
 		literal_multi_line_second_quote: (
-			[']		$saw_string								-> start				|
+			[']		$saw_string @{in_text=0;}				-> start				|
 			[^']	${fhold;*strp++='\'';*strp++='\'';}		-> literal_multi_line
 		),
 
@@ -743,7 +747,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 		singular: (
 			'true'	@{number = 1;}				-> true				|
 			'false'	@{number = 0;}				-> false			|
-			'"'		${strp = string;}			-> basic_string	|
+			'"'		${strp = string;}			-> basic_string		|
 			[']		${strp = string;}			-> literal_string	|
 			('-'|'+') ${number = 0; ts = p;}	-> number_or_date	|
 			digit	${ts = p; number = fc-'0';}	-> number_or_date
@@ -755,7 +759,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			'\n' ${ curline++; }			->list		|
 			[\t ]							->list		|
 			','								->list		|
-			']'	$end_list					->start		|
+			']'	$end_list @{in_text=0;}		->start		|
 			[^#\t, \n\]] ${fhold;}			->val
 		),
 
@@ -765,7 +769,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			'\n' ${ curline++; }		->val		|
 			[\t ]						->val		|
 			'['	$start_list				->list		|
-			']'	$end_list				->start		|
+			']'	$end_list @{in_text=0;}	->start		|
 			[^#\t \n[\]] ${fhold;}		->singular
 		)
 
@@ -776,11 +780,11 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 
 		# Text stripped of leading whitespace
 		text: (
-			'#'							->comment	|
-			'['							->table		|
-			[\t ]						->text		|
-			'\n' ${curline++;}			->start     |
-			[^#[\t \n,\]]	${fhold;}	->key
+			'#'									->comment	|
+			'['									->table		|
+			[\t ]								->text		|
+			'\n' ${curline++;} @{in_text=0;}	->start     |
+			[^#[\t \n]	${fhold;}				->key
 		)
 	);
 
@@ -805,6 +809,7 @@ toml_parse(struct toml_node *toml_root, char *buf, int buflen)
 	int malloc_error = 0;
 	char* utf_start;
 	int top = 0, stack[1024];
+	int in_text = 0;
 
 	struct toml_node *cur_table = toml_root;
 
@@ -828,6 +833,11 @@ toml_parse(struct toml_node *toml_root, char *buf, int buflen)
 	if (parse_error) {
 		fprintf(stderr, "%s at %d p = %.5s\n", parse_error, curline, p);
 		free(parse_error);
+		return 1;
+	}
+
+	if (in_text) {
+		fprintf(stderr, "not in start, line %d\n", curline);
 		return 1;
 	}
 

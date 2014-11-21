@@ -31,6 +31,7 @@ lib$(LIBNAME).$(LIBEXT): $(OBJS)
 
 main: main.o shared
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) -l$(LIBNAME)
+	ln -f -s $@ parser_test
 
 test: test.o shared
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) -l$(LIBNAME) -lcunit -lncurses
