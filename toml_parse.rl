@@ -85,7 +85,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 
 	whitespace = [\t ]*;
 
-	name = (print - ('#'|']'|'['|'='))+ >{ts = p;};
+	name = (print - ('#'|'='))+ >{ts = p;};
 	tablename =  (print - (']'|'['|'='))+ >{ts = p;};
 
 	action saw_key {

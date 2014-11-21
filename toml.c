@@ -317,6 +317,19 @@ _json_string_encode(const char* string)
 }
 
 static void
+_output_name(struct toml_node* node, FILE* output)
+{
+	char* name;
+
+	if (!node->name)
+		return;
+
+	name = _json_string_encode(node->name);
+	fprintf(output, "\"%s\": ", name);
+	free(name);
+}
+
+static void
 _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 {
 	int i;
@@ -343,9 +356,10 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 		struct toml_table_item *tail =
 			list_tail(&toml_node->value.map, struct toml_table_item, map);
 
-		if (toml_node->name)
-			fprintf(output, "\"%s\": ", toml_node->name);
+		_output_name(toml_node, output);
+
 		fprintf(output, "{\n");
+
 		list_for_each(&toml_node->value.map, item, map) {
 			_toml_tojson(&item->node, output, indent+1);
 			if (item != tail)
@@ -360,9 +374,7 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 		struct toml_list_item *tail =
 			list_tail(&toml_node->value.map, struct toml_list_item, list);
 
-		if (toml_node->name)
-			fprintf(output, "\"%s\": ", toml_node->name);
-
+		_output_name(toml_node, output);
 		fprintf(output, "{ \"type\" : \"array\",\n\"value\": [ \n");
 
 		list_for_each(&toml_node->value.list, item, list) {
@@ -370,24 +382,21 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 			if (item != tail)
 				fprintf(output, ", ");
 		}
-		fprintf(output, " ]\n");
 
-		fprintf(output, "}\n");
+		fprintf(output, " ]\n}\n");
 
 		break;
 	}
 
 	case TOML_INT:
-		if (toml_node->name)
-			fprintf(output, "\"%s\": ", toml_node->name);
+		_output_name(toml_node, output);
 		fprintf(output,
 				"{ \"type\": \"integer\", \"value\": \"%"PRId64"\" }\n",
 								toml_node->value.integer);
 		break;
 
 	case TOML_FLOAT:
-		if (toml_node->name)
-			fprintf(output, "\"%s\": ", toml_node->name);
+		_output_name(toml_node, output);
 		fprintf(output, "{ \"type\": \"float\", \"value\": \"%.*f\" }\n",
 								toml_node->value.floating.precision,
 								toml_node->value.floating.value);
@@ -396,8 +405,7 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 	case TOML_STRING: {
 		char* json_string;
 
-		if (toml_node->name)
-			fprintf(output, "\"%s\": ", toml_node->name);
+		_output_name(toml_node, output);
 
 		json_string = _json_string_encode(toml_node->value.string);
 		fprintf(output, "{\"type\": \"string\", \"value\":\"%s\" }\n", json_string);
@@ -414,9 +422,7 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 			fprintf(stderr, "gmtime failed: %s", buf);
 		}
 
-		if (toml_node->name)
-			fprintf(output, "\"%s\": ", toml_node->name);
-
+		_output_name(toml_node, output);
 		fprintf(output, "{\"type\": \"datetime\", \"value\": "
 				"\"%d-%02d-%02dT%02d:%02d:%02dZ\" }\n",
 				1900 + tm.tm_year,
@@ -425,8 +431,7 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 	}
 
 	case TOML_BOOLEAN:
-		if (toml_node->name)
-			fprintf(output, "\"%s\": ", toml_node->name);
+		_output_name(toml_node, output);
 		fprintf(output, "{ \"type\": \"bool\", \"value\": \"%s\" }\n",
 								toml_node->value.integer ? "true" : "false");
 		break;
@@ -436,7 +441,8 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 		struct toml_list_item *tail =
 			list_tail(&toml_node->value.list, struct toml_list_item, list);
 
-		fprintf(output, "\"%s\": [\n", toml_node->name);
+		_output_name(toml_node, output);
+		fprintf(output, "[\n");
 
 		list_for_each(&toml_node->value.list, item, list) {
 			_toml_tojson(&item->node, output, indent+1);
