@@ -46,7 +46,7 @@ If you want to run the tests
 Testing it
 ==========
 
-Compatible with [toml-test](https://https://github.com/BurntSushi/toml-test) when invoked
+Compatible with [toml-test](https://github.com/BurntSushi/toml-test) when invoked
 as 'parser_test'
 
 ```sh
