@@ -6,6 +6,10 @@
 #include <stdio.h>
 #include <time.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum toml_type {
 	TOML_ROOT = 1,
 	TOML_TABLE,
@@ -54,5 +58,9 @@ void toml_tojson(struct toml_node *, FILE *);
 void toml_free(struct toml_node *);
 void toml_walk(struct toml_node *, toml_node_walker, void *);
 void toml_dive(struct toml_node *, toml_node_walker, void *);
+
+#ifdef __cplusplus
+}; // extern "C"
+#endif
 
 #endif
