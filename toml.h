@@ -1,10 +1,7 @@
 #ifndef TOML_H
 #define TOML_H
 
-#include <ccan/list/list.h>
-#include <sys/types.h>
 #include <stdio.h>
-#include <time.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -20,33 +17,10 @@ enum toml_type {
 	TOML_DATE,
 	TOML_BOOLEAN,
 	TOML_TABLE_ARRAY,
+	TOML_MAX
 };
 
-struct toml_node {
-	enum toml_type type;
-	char *name;
-	union {
-		struct list_head map;
-		struct list_head list;
-		int64_t integer;
-		struct {
-			double	value;
-			int		precision;
-		} floating;
-		char *string;
-		time_t epoch;
-	} value;
-};
-
-struct toml_table_item {
-	struct list_node map;
-	struct toml_node node;
-};
-
-struct toml_list_item {
-	struct list_node list;
-	struct toml_node node;
-};
+struct toml_node;
 
 typedef void (*toml_node_walker)(struct toml_node *, void *);
 
@@ -58,6 +32,9 @@ void toml_tojson(struct toml_node *, FILE *);
 void toml_free(struct toml_node *);
 void toml_walk(struct toml_node *, toml_node_walker, void *);
 void toml_dive(struct toml_node *, toml_node_walker, void *);
+enum toml_type toml_type(struct toml_node *);
+char* toml_name(struct toml_node *);			/* caller should free return value */
+char* toml_value_as_string(struct toml_node *);	/* caller should free return value */
 
 #ifdef __cplusplus
 }; // extern "C"

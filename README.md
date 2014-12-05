@@ -14,6 +14,7 @@ Usage
 struct toml_node *root;
 struct toml_node *node;
 char *buf = "[foo]\nbar = 1\n";
+char *value;
 
 toml_init(&root);
 toml_parse(toml_root, buf, len);
@@ -21,6 +22,10 @@ toml_parse(toml_root, buf, len);
 node = toml_get(toml_root, "foo.bar");
 
 toml_dump(toml_root, stdout);
+
+value = toml_value_as_string(node);
+free(value);
+
 toml_free(root);
 ```
 

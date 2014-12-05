@@ -96,7 +96,7 @@ int main(int argc, char **argv)
 		const int size = 1024*1024;
 		int i, bytes_read;
 
-		for (i = 0; true; i++) {
+		for (i = 0; 1; i++) {
 			toml_content = realloc(toml_content, size * (i+1));
 			if (!toml_content) {
 				fprintf(stderr, "realloc: %s\n", strerror(errno));

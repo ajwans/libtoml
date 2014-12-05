@@ -6,6 +6,7 @@
 
 #include "CUnit/Basic.h"
 #include "toml.h"
+#include "toml_private.h"
 
 static int
 init_toml(void)

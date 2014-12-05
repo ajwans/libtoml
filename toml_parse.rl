@@ -1,3 +1,6 @@
+#include "toml.h"
+#include "toml_private.h"
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <unistd.h>
@@ -5,9 +8,6 @@
 #include <string.h>
 #include <inttypes.h>
 #include <time.h>
-
-#include "toml.h"
-
 #include <math.h>
 #include <signal.h>
 #include <unicode/ustring.h>
