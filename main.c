@@ -109,12 +109,6 @@ int main(int argc, char **argv)
 			if (bytes_read < size)
 				break;
 		}
-
-		FILE* foo;
-		foo = fopen("/tmp/foo.txt", "w");
-		fprintf(foo, "toml content '%.*s'\n", toml_content_size, toml_content);
-		fclose(foo);
-
 	}
 
 	ret = toml_init(&toml_root);
