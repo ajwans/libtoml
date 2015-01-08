@@ -299,6 +299,8 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 	}
 
 	action saw_date {
+		char* te = p;
+
 		struct toml_stack_item *cur_list =
 						list_tail(&list_stack, struct toml_stack_item, list);
 
@@ -319,7 +321,14 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			}
 
 			item->node.type = TOML_DATE;
-			item->node.value.epoch = timegm(&tm);
+			item->node.value.rfc3339_time.epoch = timegm(&tm);
+			item->node.value.rfc3339_time.offset_sign_negative = time_offset_is_negative;
+			item->node.value.rfc3339_time.offset = time_offset;
+			item->node.value.rfc3339_time.offset_is_zulu = time_offset_is_zulu;
+			if (secfrac_ptr)
+				item->node.value.rfc3339_time.sec_frac = strtol(secfrac_ptr, &te, 10);
+			else
+				item->node.value.rfc3339_time.sec_frac = -1;
 			item->node.name = NULL;
 
 			list_add_tail(&cur_list->node->value.list, &item->list);
@@ -335,7 +344,14 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			list_add_tail(&cur_table->value.map, &item->map);
 			item->node.name = name;
 			item->node.type = TOML_DATE;
-			item->node.value.epoch = timegm(&tm);
+			item->node.value.rfc3339_time.epoch = timegm(&tm);
+			item->node.value.rfc3339_time.offset_sign_negative = time_offset_is_negative;
+			item->node.value.rfc3339_time.offset = time_offset;
+			item->node.value.rfc3339_time.offset_is_zulu = time_offset_is_zulu;
+			if (secfrac_ptr)
+				item->node.value.rfc3339_time.sec_frac = strtol(secfrac_ptr, &te, 10);
+			else
+				item->node.value.rfc3339_time.sec_frac = -1;
 		}
 	}
 
@@ -691,7 +707,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 
 		# Zulu date, we've already picked up the first four digits and the '-'
 		# when figuring this was a date and not a number
-		date: (
+		date: ( '' >{secfrac_ptr = NULL; time_offset = 0; time_offset_is_negative = 0; time_offset_is_zulu = 0; precision = -1;}
 			digit{2} @{tm.tm_mon = atoi(fpc-1) - 1;}
 			'-'
 			digit{2} @{tm.tm_mday = atoi(fpc-1);}
@@ -700,8 +716,21 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 			':'
 			digit{2} @{tm.tm_min = atoi(fpc-1);}
 			':'
-			digit{2} @{tm.tm_sec = atoi(fpc-1);}
-			'Z' @saw_date @{in_text=0;}	->start
+			digit{2} @{tm.tm_sec = atoi(fpc-1);} -> fractional_second_or_offset
+		),
+
+		fractional_second_or_offset: (
+			'.' digit* >{secfrac_ptr=p;} >{fhold;}	-> time_offset	|
+			[^.] @{fhold;}							-> time_offset
+		),
+
+		time_offset: (
+			('-' @{time_offset_is_negative=1;}|'+')
+				digit{2} @{time_offset = atoi(fpc-1) * 60;}
+				':'
+				digit{2} @{time_offset += atoi(fpc-1);}
+				@saw_date @{in_text=0;}								-> start |
+			'Z' >{time_offset_is_zulu = 1;} @saw_date @{in_text=0;}	-> start
 		),
 
 		literal_string: (
@@ -810,6 +839,10 @@ toml_parse(struct toml_node *toml_root, char *buf, int buflen)
 	char* utf_start;
 	int top = 0, stack[1024];
 	int in_text = 0;
+	int time_offset = 0;
+	char* secfrac_ptr;
+	bool time_offset_is_negative = 0;
+	bool time_offset_is_zulu = 0;
 
 	struct toml_node *cur_table = toml_root;
 

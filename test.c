@@ -8,6 +8,8 @@
 #include "toml.h"
 #include "toml_private.h"
 
+#define ARRAY_LENGTH(x) sizeof(x)/sizeof(x[0])
+
 static int
 init_toml(void)
 {
@@ -252,6 +254,54 @@ testMultiLine(void)
 }
 
 static void
+testRFC3339(void)
+{
+	int	i;
+
+	struct {
+		char* toml_str;
+		char* rfc3339_str;
+
+	} results[] = {
+		{
+			"rfc3339 = 1977-10-30T08:00:00.123-00:00",
+			"1977-10-30T08:00:00.123-00:00"
+		},
+		{
+			"rfc3339 = 1977-10-30T08:00:00Z",
+			"1977-10-30T08:00:00Z"
+		},
+		{
+			"rfc3339 = 1977-10-30T08:00:00.123+00:00",
+			"1977-10-30T08:00:00.123+00:00"
+		}
+	};
+
+	for (i = 0; i < ARRAY_LENGTH(results); i++)
+	{
+		char*				result;
+		int					ret;
+		struct toml_node*	root = NULL;
+		struct toml_node*	node;
+
+		toml_init(&root);
+
+		ret = toml_parse(root, results[i].toml_str, strlen(results[i].toml_str));
+		CU_ASSERT(ret == 0);
+
+		node = toml_get(root, "rfc3339");
+		CU_ASSERT(node != NULL);
+		CU_ASSERT(node->type == TOML_DATE);
+
+		result = toml_value_as_string(node);
+		CU_ASSERT(memcmp(result, results[i].rfc3339_str, strlen(results[i].rfc3339_str)) == 0);
+		free(result);
+
+		toml_free(root);
+	}
+}
+
+static void
 mmapAndParse(char *path, int expected)
 {
 	int					fd, ret;
@@ -331,6 +381,9 @@ int main(void)
 		goto out;
 
 	if ((NULL == CU_add_test(pSuite, "test basic multi-line string", testMultiLine)))
+		goto out;
+
+	if ((NULL == CU_add_test(pSuite, "test RFC3339 dates", testRFC3339)))
 		goto out;
 
 	CU_basic_set_mode(CU_BRM_VERBOSE);

@@ -17,7 +17,13 @@ struct toml_node {
 			int		precision;
 		} floating;
 		char *string;
-		time_t epoch;
+		struct {
+			time_t	epoch;
+			int		sec_frac;
+			bool	offset_sign_negative;
+			uint8_t	offset;
+			bool	offset_is_zulu;
+		} rfc3339_time;
 	} value;
 };
 

@@ -482,14 +482,27 @@ toml_value_as_string(struct toml_node* node)
 		break;
 
 	case TOML_DATE: {
-		struct tm tm;
+		struct tm	tm;
+		char		offset_string[7] = "Z";
+		char		sec_frac[1024] = "";
 
-		if (!gmtime_r(&node->value.epoch, &tm))
+		if (!node->value.rfc3339_time.offset_is_zulu)
+			sprintf(offset_string, "%s%02d:%02d",
+				node->value.rfc3339_time.offset_sign_negative ? "-" : "+",
+				node->value.rfc3339_time.offset / 60,
+				node->value.rfc3339_time.offset % 60);
+
+		if (node->value.rfc3339_time.sec_frac != -1)
+			snprintf(sec_frac, sizeof(sec_frac), ".%d",
+											node->value.rfc3339_time.sec_frac);
+
+		if (!gmtime_r(&node->value.rfc3339_time.epoch, &tm))
 			break;
 
-		asprintf(&ret, "%d-%02d-%02dT%02d:%02d:%02dZ",
-				1900 + tm.tm_year,
-				tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+		asprintf(&ret, "%d-%02d-%02dT%02d:%02d:%02d%s%s",
+			1900 + tm.tm_year,
+			tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
+			sec_frac, offset_string);
 		break;
 	}
 
