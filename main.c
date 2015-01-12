@@ -37,7 +37,7 @@ int main(int argc, char **argv)
 	char				*file = NULL, *get = NULL;
 	int					exit_code = EXIT_SUCCESS;
 	char*				bname;
-		
+
 	bname = basename(argv[0]);
 	if (strcmp(bname, "parser_test") == 0) {
 		dump = 1;

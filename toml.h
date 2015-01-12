@@ -22,19 +22,19 @@ enum toml_type {
 
 struct toml_node;
 
-typedef void (*toml_node_walker)(struct toml_node *, void *);
+typedef void (*toml_node_walker)(struct toml_node*, void*);
 
-int toml_init(struct toml_node **);
-int toml_parse(struct toml_node *, char *, int);
-struct toml_node *toml_get(struct toml_node *, char *);
-void toml_dump(struct toml_node *, FILE *);
-void toml_tojson(struct toml_node *, FILE *);
-void toml_free(struct toml_node *);
-void toml_walk(struct toml_node *, toml_node_walker, void *);
-void toml_dive(struct toml_node *, toml_node_walker, void *);
-enum toml_type toml_type(struct toml_node *);
-char* toml_name(struct toml_node *);			/* caller should free return value */
-char* toml_value_as_string(struct toml_node *);	/* caller should free return value */
+int toml_init(struct toml_node**);
+int toml_parse(struct toml_node*, char*, int);
+struct toml_node* toml_get(struct toml_node*, char*);
+void toml_dump(struct toml_node*, FILE*);
+void toml_tojson(struct toml_node*, FILE*);
+void toml_free(struct toml_node*);
+void toml_walk(struct toml_node*, toml_node_walker, void*);
+void toml_dive(struct toml_node*, toml_node_walker, void*);
+enum toml_type toml_type(struct toml_node*);
+char* toml_name(struct toml_node*);				/* caller should free return value */
+char* toml_value_as_string(struct toml_node*);	/* caller should free return value */
 
 #ifdef __cplusplus
 }; // extern "C"

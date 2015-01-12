@@ -80,6 +80,44 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 	return 4;
 }
 
+bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table, struct toml_node* node, char* name, char** parse_error, int* malloc_error, int cur_line)
+{
+	struct toml_stack_item *cur_list =
+					list_tail(list_stack, struct toml_stack_item, list);
+
+	if (cur_list) {
+		if (cur_list->list_type && cur_list->list_type != node->type) {
+			asprintf(parse_error,
+					"incompatible types list %s this %s line %d\n",
+					toml_type_to_str(cur_list->list_type),
+					toml_type_to_str(node->type), cur_line);
+			return false;
+		}
+		cur_list->list_type = node->type;
+
+		struct toml_list_item *item = malloc(sizeof(*item));
+		if (!item) {
+			*malloc_error = 1;
+			return false;
+		}
+
+		memcpy(&item->node, node, sizeof(*node));
+		item->node.name = NULL;
+		list_add_tail(&cur_list->node->value.list, &item->list);
+	} else {
+		struct toml_table_item *item = malloc(sizeof(*item));
+		if (!item) {
+			*malloc_error = 1;
+			return false;
+		}
+		memcpy(&item->node, node, sizeof(*node));
+		item->node.name = name;
+		list_add_tail(&cur_table->value.map, &item->map);
+	}
+
+	return true;
+}
+
 %%{
 	machine toml;
 
@@ -96,7 +134,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 
 			asprintf(&parse_error,
 					"duplicate key %s line %d\n",
-					item->node.name, curline);
+					item->node.name, cur_line);
 			fbreak;
 		}
 
@@ -107,252 +145,104 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 	}
 
 	action saw_bool {
+		struct toml_node node;
+
+		node.type = TOML_BOOLEAN;
+		node.value.integer = number;
+
+		if (!add_node_to_tree(&list_stack, cur_table, &node, name, &parse_error, &malloc_error, cur_line))
+			fbreak;
+
 		struct toml_stack_item *cur_list =
-						list_tail(&list_stack, struct toml_stack_item, list);
-
-		if (cur_list) {
-			if (cur_list->list_type && cur_list->list_type != TOML_BOOLEAN) {
-				asprintf(&parse_error,
-						"incompatible types list %s this %s line %d\n",
-						toml_type_to_str(cur_list->list_type),
-						toml_type_to_str(TOML_BOOLEAN), curline);
-				fbreak;
-			}
-			cur_list->list_type = TOML_BOOLEAN;
-
-			struct toml_list_item *item = malloc(sizeof(*item));
-			if (!item) {
-				malloc_error = 1;
-				fbreak;
-			}
-
-			item->node.type = TOML_BOOLEAN;
-			item->node.value.integer = number;
-			item->node.name = NULL;
-
-			list_add_tail(&cur_list->node->value.list, &item->list);
-
+					list_tail(&list_stack, struct toml_stack_item, list);
+		if (cur_list)
 			fnext list;
-		} else {
-			struct toml_table_item *item = malloc(sizeof(*item));
-			if (!item) {
-				malloc_error = 1;
-				fbreak;
-			}
-
-			item->node.name = name;
-			item->node.type = TOML_BOOLEAN;
-			item->node.value.integer = number;
-
-			list_add_tail(&cur_table->value.map, &item->map);
-		}
 	}
 
 	action saw_int {
-		char* te = p;
-		number = strtoll(ts, &te, 10);
+		char*				te = p;
+		struct toml_node	node;
+
+		node.type = TOML_INT;
+		node.value.integer = strtoll(ts, &te, 10);
+
+		if (!add_node_to_tree(&list_stack, cur_table, &node, name, &parse_error, &malloc_error, cur_line))
+			fbreak;
 
 		struct toml_stack_item *cur_list =
-						list_tail(&list_stack, struct toml_stack_item, list);
-
-		if (cur_list) {
-			if (cur_list->list_type && cur_list->list_type != TOML_INT) {
-				asprintf(&parse_error,
-						"incompatible types list %s this %s line %d\n",
-						toml_type_to_str(cur_list->list_type),
-						toml_type_to_str(TOML_INT), curline);
-				fbreak;
-			}
-			cur_list->list_type = TOML_INT;
-
-			struct toml_list_item *item = malloc(sizeof(*item));
-			if (!item) {
-				malloc_error = 1;
-				fbreak;
-			}
-
-			item->node.type = TOML_INT;
-			item->node.value.integer = number;
-			item->node.name = NULL;
-
-			list_add_tail(&cur_list->node->value.list, &item->list);
-
+					list_tail(&list_stack, struct toml_stack_item, list);
+		if (cur_list)
 			fnext list;
-		} else {
-			struct toml_table_item *item = malloc(sizeof(*item));
-			if (!item) {
-				malloc_error = 1;
-				fbreak;
-			}
-
-			item->node.name = name;
-			item->node.type = TOML_INT;
-			item->node.value.integer = number;
-
-			list_add_tail(&cur_table->value.map, &item->map);
-		}
-
-		fhold;
 	}
 
 	action saw_float {
-		char* te = p;
+		char*				te = p;
+		struct toml_node	node;
+
 		floating = strtod(ts, &te);
+
+		node.type = TOML_FLOAT;
+		node.value.floating.value = floating;
+		node.value.floating.precision = precision;
 
 		if (precision == 0) {
 			asprintf(&parse_error, "bad float\n");
 			fbreak;
 		}
 
+		if (!add_node_to_tree(&list_stack, cur_table, &node, name, &parse_error, &malloc_error, cur_line))
+			fbreak;
+
 		struct toml_stack_item *cur_list =
-						list_tail(&list_stack, struct toml_stack_item, list);
-
-		if (cur_list) {
-			if (cur_list->list_type && cur_list->list_type != TOML_FLOAT) {
-				asprintf(&parse_error,
-						"incompatible types list %s this %s line %d\n",
-						toml_type_to_str(cur_list->list_type),
-						toml_type_to_str(TOML_FLOAT), curline);
-				fbreak;
-			}
-			cur_list->list_type = TOML_FLOAT;
-
-			struct toml_list_item *item = malloc(sizeof(*item));
-			if (!item) {
-				malloc_error = 1;
-				fbreak;
-			}
-
-			item->node.type = TOML_FLOAT;
-			item->node.value.floating.value = floating;
-			item->node.value.floating.precision = precision;
-			item->node.name = NULL;
-
-			list_add_tail(&cur_list->node->value.list, &item->list);
-
+					list_tail(&list_stack, struct toml_stack_item, list);
+		if (cur_list)
 			fnext list;
-		} else {
-			struct toml_table_item *item = malloc(sizeof(*item));
-			if (!item) {
-				malloc_error = 1;
-				fbreak;
-			}
-
-			list_add_tail(&cur_table->value.map, &item->map);
-			item->node.name = name;
-			item->node.type = TOML_FLOAT;
-			item->node.value.floating.value = floating;
-			item->node.value.floating.precision = precision;
-		}
-
-		fhold;
 	}
 
 	action saw_string {
-		int len = strp - string + 1;
+		int					len = strp - string + 1;
+		struct toml_node	node;
+
 		*strp = 0;
 
-		struct toml_stack_item *cur_list =
-						list_tail(&list_stack, struct toml_stack_item, list);
-
-		if (cur_list) {
-			if (cur_list->list_type && cur_list->list_type != TOML_STRING) {
-				asprintf(&parse_error,
-						"incompatible types list %s this %s line %d\n",
-						toml_type_to_str(cur_list->list_type),
-						toml_type_to_str(TOML_STRING), curline);
-				fbreak;
-			}
-			cur_list->list_type = TOML_STRING;
-
-			struct toml_list_item *item = malloc(sizeof(*item));
-			if (!item) {
-				malloc_error = 1;
-				fbreak;
-			}
-
-			item->node.type = TOML_STRING;
-			item->node.value.string = malloc(len);
-			if (!item->node.value.string) {
-				malloc_error = 1;
-				fbreak;
-			}
-			memcpy(item->node.value.string, string, len);
-			item->node.name = NULL;
-
-			list_add_tail(&cur_list->node->value.list, &item->list);
-
-			fnext list;
-		} else {
-			struct toml_table_item *item = malloc(sizeof(*item));
-
-			list_add_tail(&cur_table->value.map, &item->map);
-			item->node.name = name;
-			item->node.type = TOML_STRING;
-			item->node.value.string = malloc(len);
-			if (!item->node.value.string) {
-				malloc_error = 1;
-				fbreak;
-			}
-			memcpy(item->node.value.string, string, len);
+		node.type = TOML_STRING;
+		node.value.string = malloc(len);
+		if (!node.value.string) {
+			malloc_error = 1;
+			fbreak;
 		}
+		memcpy(node.value.string, string, len);
+
+		if (!add_node_to_tree(&list_stack, cur_table, &node, name, &parse_error, &malloc_error, cur_line))
+			fbreak;
+
+		struct toml_stack_item *cur_list =
+					list_tail(&list_stack, struct toml_stack_item, list);
+		if (cur_list)
+			fnext list;
 	}
 
 	action saw_date {
-		char* te = p;
+		char*	te = p;
+		struct	toml_node node;
+
+		node.type = TOML_DATE;
+		node.value.rfc3339_time.epoch = timegm(&tm);
+		node.value.rfc3339_time.offset_sign_negative = time_offset_is_negative;
+		node.value.rfc3339_time.offset = time_offset;
+		node.value.rfc3339_time.offset_is_zulu = time_offset_is_zulu;
+		if (secfrac_ptr)
+			node.value.rfc3339_time.sec_frac = strtol(secfrac_ptr, &te, 10);
+		else
+			node.value.rfc3339_time.sec_frac = -1;
+
+		if (!add_node_to_tree(&list_stack, cur_table, &node, name, &parse_error, &malloc_error, cur_line))
+			fbreak;
 
 		struct toml_stack_item *cur_list =
-						list_tail(&list_stack, struct toml_stack_item, list);
-
-		if (cur_list) {
-			if (cur_list->list_type && cur_list->list_type != TOML_DATE) {
-				asprintf(&parse_error,
-						"incompatible types list %s this %s line %d\n",
-						toml_type_to_str(cur_list->list_type),
-						toml_type_to_str(TOML_DATE), curline);
-				fbreak;
-			}
-			cur_list->list_type = TOML_DATE;
-
-			struct toml_list_item *item = malloc(sizeof(*item));
-			if (!item) {
-				malloc_error = 1;
-				fbreak;
-			}
-
-			item->node.type = TOML_DATE;
-			item->node.value.rfc3339_time.epoch = timegm(&tm);
-			item->node.value.rfc3339_time.offset_sign_negative = time_offset_is_negative;
-			item->node.value.rfc3339_time.offset = time_offset;
-			item->node.value.rfc3339_time.offset_is_zulu = time_offset_is_zulu;
-			if (secfrac_ptr)
-				item->node.value.rfc3339_time.sec_frac = strtol(secfrac_ptr, &te, 10);
-			else
-				item->node.value.rfc3339_time.sec_frac = -1;
-			item->node.name = NULL;
-
-			list_add_tail(&cur_list->node->value.list, &item->list);
-
+					list_tail(&list_stack, struct toml_stack_item, list);
+		if (cur_list)
 			fnext list;
-		} else {
-			struct toml_table_item *item = malloc(sizeof(*item));
-			if (!item) {
-				malloc_error = 1;
-				fbreak;
-			}
-
-			list_add_tail(&cur_table->value.map, &item->map);
-			item->node.name = name;
-			item->node.type = TOML_DATE;
-			item->node.value.rfc3339_time.epoch = timegm(&tm);
-			item->node.value.rfc3339_time.offset_sign_negative = time_offset_is_negative;
-			item->node.value.rfc3339_time.offset = time_offset;
-			item->node.value.rfc3339_time.offset_is_zulu = time_offset_is_zulu;
-			if (secfrac_ptr)
-				item->node.value.rfc3339_time.sec_frac = strtol(secfrac_ptr, &te, 10);
-			else
-				item->node.value.rfc3339_time.sec_frac = -1;
-		}
 	}
 
 	action start_list {
@@ -383,7 +273,7 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 				asprintf(&parse_error,
 						"incompatible types list %s this %s line %d\n",
 						toml_type_to_str(tail->list_type),
-						toml_type_to_str(TOML_BOOLEAN), curline);
+						toml_type_to_str(TOML_BOOLEAN), cur_line);
 				fbreak;
 			}
 
@@ -553,13 +443,6 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 		cur_table = &new_table_entry->node;
 	}
 
-	action saw_comment {
-		if (!list_empty(&list_stack))
-			fnext list;
-
-		fhold;
-	}
-
 	action saw_utf16 {
 		UChar		utf16[2] = { 0 };
 		int32_t		len = sizeof(string) - (strp - string);
@@ -597,22 +480,24 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 	lines = (
 		start: (
 			# count the indentation to know where the tables end
-			[\t ]*	>{indent = 0;} ${ indent++; } %{in_text=1;}	->text |
-			[\n]	${curline++;}								->start
+			'#'			>{in_text = 0; fcall comment;}				->start	|
+			[\t ]+		>{in_text = 0; indent = 0;} @{indent++;}	->start	|
+			[\n]		>{in_text = 0; cur_line++;}					->start	|
+			[^\t \n]	@{fhold;} %{in_text = 1;}					->text
 		),
 
 		# just discard everything until newline
-		comment: ( [^\n]*[\n] @saw_comment @{in_text=0;}	->start ),
+		comment: ( [^\n]*[\n] ${cur_line++; fret;} ),
 
 		# a table
 		table: (
-			tablename ']' @saw_table @{in_text=0;}					->start	|
-			'[' tablename ']' ']' @saw_table_array @{in_text=0;}	->start
+			tablename ']' @saw_table				->start	|
+			'[' tablename ']' ']' @saw_table_array	->start
 		),
 
 		# the boolean data type
-		true:	( any	>{fhold;} $saw_bool	@{in_text=0;}	->start ),
-		false:	( any 	>{fhold;} $saw_bool	@{in_text=0;}	->start ),
+		true:	( any	>{fhold;} $saw_bool	->start ),
+		false:	( any	>{fhold;} $saw_bool	->start ),
 
 		basic_string: (
 			["]				-> basic_empty_or_multi_line	|
@@ -620,29 +505,29 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 		),
 
 		basic_empty_or_multi_line: (
-			["]											-> basic_multi_line_start	|
-			[^"] $saw_string ${fhold;} @{in_text=0;}	-> start
+			["]							-> basic_multi_line_start	|
+			[^"] $saw_string ${fhold;}	-> start
 		),
 
 		basic_multi_line_start: (
-			'\n' ${curline++;}	-> basic_multi_line |
+			'\n' ${cur_line++;}	-> basic_multi_line |
 			[^\n] ${fhold;}		-> basic_multi_line
 		),
 
 		basic_multi_line: (
 			["]										-> basic_multi_line_quote	|
-			[\n]		${curline++;*strp++=fc;}	-> basic_multi_line			|
+			[\n]		${cur_line++;*strp++=fc;}	-> basic_multi_line			|
 			[\\]									-> basic_multi_line_escape	|
 			[^"\n\\]	${*strp++=fc;}				-> basic_multi_line
 		),
 
 		basic_multi_line_escape: (
-			[\n]	${curline++;}			-> basic_multi_line_rm_ws	|
+			[\n]	${cur_line++;}			-> basic_multi_line_rm_ws	|
 			[^\n]	${fcall str_escape;}	-> basic_multi_line
 		),
 
 		basic_multi_line_rm_ws: (
-			[\n]	${curline++;}	-> basic_multi_line_rm_ws |
+			[\n]	${cur_line++;}	-> basic_multi_line_rm_ws |
 			[ \t]					-> basic_multi_line_rm_ws |
 			[^ \t\n]	${fhold;}	-> basic_multi_line
 		),
@@ -653,15 +538,15 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 		),
 
 		basic_multi_line_quote_2: (
-			["]		$saw_string @{in_text=0;}			-> start |
+			["]		$saw_string							-> start |
 			[^"]	${fhold;*strp++='"';*strp++='"';}	-> basic_multi_line
 		),
 
 		# String, we have to escape \0, \t, \n, \r, everything else can
 		# be prefixed with a slash and the slash just gets dropped
 		basic_string_contents: (
-			'"'			$saw_string @{in_text=0;}	-> start					|
-			[\n]		${curline++; *strp++=fc;}	-> basic_string_contents	|
+			'"'			$saw_string					-> start					|
+			[\n]		${cur_line++; *strp++=fc;}	-> basic_string_contents	|
 			[\\]		${fcall str_escape;}		-> basic_string_contents	|
 			[^"\n\\]	${*strp++=fc;}				-> basic_string_contents
 		),
@@ -692,22 +577,21 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 		# When we don't know yet if this is going to be a date or a number
 		# this is the state
 		number_or_date: (
-			digit ${number *= 10; number += fc - '0';}	->number_or_date	|
+			digit ${number *= 10; number += fc-'0';}	->number_or_date	|
 			'-'	${tm.tm_year = number - 1900;}			->date				|
 			'.'	>{precision = 0;}						->fractional_part	|
-			[\n] ${curline++;} $saw_int @{in_text=0;}	->start				|
-			[\t ,\]] $saw_int @{in_text=0;}				->start
+			[\t ,\]\n] $saw_int ${fhold;}				->start
 		),
 
 		# Fractional part of a double
 		fractional_part: (
-			[0-9]	${precision++;}					->fractional_part |
-			[^0-9]	$saw_float @{in_text=0;}		->start
+			[0-9]	${precision++;}			->fractional_part |
+			[^0-9]	$saw_float ${fhold;}	->start
 		),
 
 		# Zulu date, we've already picked up the first four digits and the '-'
 		# when figuring this was a date and not a number
-		date: ( '' >{secfrac_ptr = NULL; time_offset = 0; time_offset_is_negative = 0; time_offset_is_zulu = 0; precision = -1;}
+		date: ( '' >{secfrac_ptr = NULL; time_offset = 0; time_offset_is_negative = 0; time_offset_is_zulu = 0;}
 			digit{2} @{tm.tm_mon = atoi(fpc-1) - 1;}
 			'-'
 			digit{2} @{tm.tm_mday = atoi(fpc-1);}
@@ -729,8 +613,8 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 				digit{2} @{time_offset = atoi(fpc-1) * 60;}
 				':'
 				digit{2} @{time_offset += atoi(fpc-1);}
-				@saw_date @{in_text=0;}								-> start |
-			'Z' >{time_offset_is_zulu = 1;} @saw_date @{in_text=0;}	-> start
+				@saw_date								-> start |
+			'Z' >{time_offset_is_zulu = 1;} @saw_date	-> start
 		),
 
 		literal_string: (
@@ -739,23 +623,23 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 		),
 
 		literal_string_contents: (
-			[']		$saw_string @{in_text=0;}	->start						|
-			[^']	${*strp++=fc;}				->literal_string_contents
+			[']		$saw_string		->start						|
+			[^']	${*strp++=fc;}	->literal_string_contents
 		),
 
 		literal_empty_or_multi_line: (
-			[']											-> literal_multi_line_start	|
-			[^']	${fhold;} $saw_string @{in_text=0;}	-> start
+			[']								-> literal_multi_line_start	|
+			[^']	${fhold;} $saw_string	-> start
 		),
 
 		literal_multi_line_start: (
-			'\n' ${curline++;}	-> literal_multi_line |
+			'\n' ${cur_line++;}	-> literal_multi_line	|
 			[^\n] ${fhold;}		-> literal_multi_line
 		),
 
 		literal_multi_line: (
 			[']									-> literal_multi_line_quote	|
-			[\n]	${curline++;*strp++=fc;}	-> literal_multi_line		|
+			[\n]	${cur_line++;*strp++=fc;}	-> literal_multi_line		|
 			[^'\n]	${*strp++=fc;}				-> literal_multi_line
 		),
 
@@ -768,8 +652,8 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 		# saw 2 quotes, if there's not another one go back to literalMultiLine
 		# if there is another then terminate the string
 		literal_multi_line_second_quote: (
-			[']		$saw_string @{in_text=0;}				-> start				|
-			[^']	${fhold;*strp++='\'';*strp++='\'';}		-> literal_multi_line
+			[']		$saw_string							-> start				|
+			[^']	${fhold;*strp++='\'';*strp++='\'';}	-> literal_multi_line
 		),
 
 		# Non-list value
@@ -784,21 +668,21 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 
 		# A list of values
 		list: (
-			'#'								->comment	|
-			'\n' ${ curline++; }			->list		|
-			[\t ]							->list		|
-			','								->list		|
-			']'	$end_list @{in_text=0;}		->start		|
-			[^#\t, \n\]] ${fhold;}			->val
+			'#'		>{fcall comment;}	->list	|
+			'\n'	${cur_line++;}		->list	|
+			[\t ]						->list	|
+			','							->list	|
+			']'	$end_list				->start	|
+			[^#\t, \n\]] ${fhold;}		->val
 		),
 
 		# A val can be either a list or a singular value
 		val: (
-			'#'							->comment	|
-			'\n' ${ curline++; }		->val		|
+			'#'	>{fcall comment;}		->val		|
+			'\n' ${ cur_line++; }		->val		|
 			[\t ]						->val		|
 			'['	$start_list				->list		|
-			']'	$end_list @{in_text=0;}	->start		|
+			']'	$end_list				->start		|
 			[^#\t \n[\]] ${fhold;}		->singular
 		)
 
@@ -809,11 +693,11 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 
 		# Text stripped of leading whitespace
 		text: (
-			'#'									->comment	|
-			'['									->table		|
-			[\t ]								->text		|
-			'\n' ${curline++;} @{in_text=0;}	->start     |
-			[^#[\t \n]	${fhold;}				->key
+			'#'	>{fcall comment;}	->text	|
+			'['						->table	|
+			[\t ]					->text	|
+			'\n' ${cur_line++;}		->start	|
+			[^#[\t \n]	${fhold;}	->key
 		)
 	);
 
@@ -823,9 +707,9 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 %%write data;
 
 int
-toml_parse(struct toml_node *toml_root, char *buf, int buflen)
+toml_parse(struct toml_node* toml_root, char* buf, int buflen)
 {
-	int indent = 0, cs, curline = 1;
+	int indent = 0, cs, cur_line = 1;
 	char *p, *pe;
 	char *ts;
 	char string[1024], *strp;
@@ -859,23 +743,29 @@ toml_parse(struct toml_node *toml_root, char *buf, int buflen)
 	%% write exec;
 
 	if (malloc_error) {
-		fprintf(stderr, "malloc failed, line %d\n", curline);
+		fprintf(stderr, "malloc failed, line %d\n", cur_line);
 		return 1;
 	}
 
 	if (parse_error) {
-		fprintf(stderr, "%s at %d p = %.5s\n", parse_error, curline, p);
+		fprintf(stderr, "%s at %d p = %.5s\n", parse_error, cur_line, p);
 		free(parse_error);
 		return 1;
 	}
 
 	if (in_text) {
-		fprintf(stderr, "not in start, line %d\n", curline);
+		fprintf(stderr, "not in start, line %d\n", cur_line);
+		return 1;
+	}
+
+	/* check we have consumed the entire buffer */
+	if (p != pe) {
+		fprintf(stderr, "entire buffer unconsumed, line %d\n", cur_line);
 		return 1;
 	}
 
 	if (cs == toml_error) {
-		fprintf(stderr, "PARSE_ERROR, line %d, p = '%.5s'", curline, p);
+		fprintf(stderr, "PARSE_ERROR, line %d, p = '%.5s'", cur_line, p);
 		return 1;
 	}
 
