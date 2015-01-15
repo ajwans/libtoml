@@ -177,11 +177,7 @@ _toml_process(struct toml_node *node, toml_node_walker fn, enum order order, voi
 		break;
 	}
 
-	case TOML_STRING:
-	case TOML_INT:
-	case TOML_FLOAT:
-	case TOML_DATE:
-	case TOML_BOOLEAN:
+	default:
 		break;
 	}
 
@@ -445,10 +441,7 @@ toml_node_walker_free(struct toml_node* node, void* ctx)
 		free(node->value.string);
 		break;
 
-	case TOML_INT:
-	case TOML_FLOAT:
-	case TOML_DATE:
-	case TOML_BOOLEAN:
+	default:
 		break;
 	}
 }
@@ -508,6 +501,9 @@ toml_value_as_string(struct toml_node* node)
 
 	case TOML_BOOLEAN:
 		asprintf(&ret, "%s", node->value.integer ? "true" : "false");
+		break;
+
+	default:
 		break;
 	}
 

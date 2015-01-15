@@ -32,6 +32,8 @@ toml_type_to_str(enum toml_type type)
 	CASE_ENUM_TO_STR(TOML_DATE);
 	CASE_ENUM_TO_STR(TOML_BOOLEAN);
 	CASE_ENUM_TO_STR(TOML_TABLE_ARRAY);
+	default:
+		return "unknown toml type";
 	}
 #undef CASE_ENUM_TO_STR
 	return "unknown toml type";
