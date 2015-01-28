@@ -1,10 +1,4 @@
 Makefile
-aclocal.m4
-autom4te.cache
-config.h
-config.log
-config.status
-configure
 libtoml.dylib
 libtoml.so
 main
@@ -14,6 +8,13 @@ test.o
 toml.o
 toml_parse.c
 toml_parse.o
-toml_parse.dot
-toml_parse.png
-toml_parse.c
+.ninja_deps
+.ninja_log
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+libtoml.build
+libtoml.xcodeproj
+build.ninja
+cmake_install.cmake
+rules.ninja
