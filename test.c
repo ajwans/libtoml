@@ -61,7 +61,7 @@ testNumbers(void)
 	struct toml_node*	one;
 	struct toml_node*	negative_one_hundred;
 	struct toml_node*	one_thousand;
-	char*				numbers = "one = +1\nnegative_one_hundred = -100\none_thousand = 1_000\n";
+	char*				numbers = "one = +1\nnegative_one_hundred = -100\none_thousand = 1_000";
 	char*				one_as_string;
 	char*				negative_one_hundred_as_string;
 	char*				one_thousand_as_string;

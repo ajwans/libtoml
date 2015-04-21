@@ -485,6 +485,7 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 			'#'			>{in_text = 0; fcall comment;}				->start	|
 			[\t ]+		>{in_text = 0; indent = 0;} @{indent++;}	->start	|
 			[\n]		>{in_text = 0; cur_line++;}					->start	|
+			[\0]		>{in_text = 0; fbreak;}						->start	|
 			[^\t \n]	@{fhold;} %{in_text = 1;}					->text
 		),
 
@@ -582,7 +583,7 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 			'_' ? digit ${number *= 10; number += fc-'0';}	->number_or_date	|
 			'-'	${tm.tm_year = number - 1900;}				->date				|
 			'.'	>{precision = 0;}							->fractional_part	|
-			[\t ,\]\n] $saw_int ${fhold;}					->start
+			[\t ,\]\n\0] $saw_int ${fhold;}					->start
 		),
 
 		# Fractional part of a double
@@ -741,7 +742,7 @@ toml_parse(struct toml_node* toml_root, char* buf, int buflen)
 	%% write init;
 
 	p = buf;
-	pe = buf + buflen;
+	pe = buf + buflen + 1;
 
 	%% write exec;
 
