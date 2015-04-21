@@ -54,6 +54,51 @@ testTypes(void)
 }
 
 static void
+testNumbers(void)
+{
+	int					ret;
+	struct toml_node*	root;
+	struct toml_node*	one;
+	struct toml_node*	negative_one_hundred;
+	struct toml_node*	one_thousand;
+	char*				numbers = "one = +1\nnegative_one_hundred = -100\none_thousand = 1_000\n";
+	char*				one_as_string;
+	char*				negative_one_hundred_as_string;
+	char*				one_thousand_as_string;
+
+	toml_init(&root);
+
+	ret = toml_parse(root, numbers, strlen(numbers));
+	CU_ASSERT(ret == 0);
+
+	one = toml_get(root, "one");
+	CU_ASSERT(one != NULL);
+
+	one_as_string = toml_value_as_string(one);
+	CU_ASSERT(one_as_string != NULL);
+	CU_ASSERT(memcmp(one_as_string, "1", strlen("1")) == 0);
+	free(one_as_string);
+
+	negative_one_hundred = toml_get(root, "negative_one_hundred");
+	CU_ASSERT(negative_one_hundred != NULL);
+
+	negative_one_hundred_as_string = toml_value_as_string(negative_one_hundred);
+	CU_ASSERT(negative_one_hundred_as_string != NULL);
+	CU_ASSERT(memcmp(negative_one_hundred_as_string, "-100", strlen("-100")) == 0);
+	free(negative_one_hundred_as_string);
+
+	one_thousand = toml_get(root, "one_thousand");
+	CU_ASSERT(one_thousand != NULL);
+
+	one_thousand_as_string = toml_value_as_string(one_thousand);
+	CU_ASSERT(one_thousand_as_string != NULL);
+	CU_ASSERT(memcmp(one_thousand_as_string, "1000", strlen("1000")) == 0);
+	free(one_thousand_as_string);
+
+	toml_free(root);
+}
+
+static void
 testUTF16(void)
 {
 	int					ret;
@@ -360,6 +405,9 @@ int main(void)
 		goto out;
 
 	if ((NULL == CU_add_test(pSuite, "test types", testTypes)))
+		goto out;
+
+	if ((NULL == CU_add_test(pSuite, "test numbers", testNumbers)))
 		goto out;
 
 	if ((NULL == CU_add_test(pSuite, "test good examples", testGoodExamples)))

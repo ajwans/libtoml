@@ -166,7 +166,7 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 		struct toml_node	node;
 
 		node.type = TOML_INT;
-		node.value.integer = strtoll(ts, &te, 10);
+		node.value.integer = negative ? -number : number;
 
 		if (!add_node_to_tree(&list_stack, cur_table, &node, name, &parse_error, &malloc_error, cur_line))
 			fbreak;
@@ -579,10 +579,10 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 		# When we don't know yet if this is going to be a date or a number
 		# this is the state
 		number_or_date: (
-			digit ${number *= 10; number += fc-'0';}	->number_or_date	|
-			'-'	${tm.tm_year = number - 1900;}			->date				|
-			'.'	>{precision = 0;}						->fractional_part	|
-			[\t ,\]\n] $saw_int ${fhold;}				->start
+			'_' ? digit ${number *= 10; number += fc-'0';}	->number_or_date	|
+			'-'	${tm.tm_year = number - 1900;}				->date				|
+			'.'	>{precision = 0;}							->fractional_part	|
+			[\t ,\]\n] $saw_int ${fhold;}					->start
 		),
 
 		# Fractional part of a double
@@ -660,12 +660,12 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 
 		# Non-list value
 		singular: (
-			'true'	@{number = 1;}				-> true				|
-			'false'	@{number = 0;}				-> false			|
-			'"'		${strp = string;}			-> basic_string		|
-			[']		${strp = string;}			-> literal_string	|
-			('-'|'+') ${number = 0; ts = p;}	-> number_or_date	|
-			digit	${ts = p; number = fc-'0';}	-> number_or_date
+			'true'		@{number = 1;}									-> true				|
+			'false'		@{number = 0;}									-> false			|
+			'"'			${strp = string;}								-> basic_string		|
+			[']			${strp = string;}								-> literal_string	|
+			('-'|'+')	${negative = fc == '-'; number = 0; ts = p;}	-> number_or_date	|
+			digit		${negative = false; ts = p; number = fc-'0';}	-> number_or_date
 		),
 
 		# A list of values
@@ -717,6 +717,7 @@ toml_parse(struct toml_node* toml_root, char* buf, int buflen)
 	char string[1024], *strp;
 	int precision, namelen;
 	int64_t number;
+	bool negative;
 	struct tm tm;
 	double floating;
 	char *name;

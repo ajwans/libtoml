@@ -40,4 +40,4 @@ char* toml_value_as_string(struct toml_node*);	/* caller should free return valu
 }; // extern "C"
 #endif
 
-#endif
+#endif /* TOML_H */
