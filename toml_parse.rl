@@ -125,13 +125,17 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 
 	whitespace = [\t ]*;
 
-	name = (print - ('#'|'='))+ >{ts = p;};
-	tablename =  (print - (']'|'['|'='))+ >{ts = p;};
+	name = (print - ('#'|'='|'"'|whitespace))+					>{ts = p;};
+	name_in_double_quotes = (print - '"')+						>{ts = p;};
+	name_in_single_quotes = (print - "'")+						>{ts = p;};
+	tablename =  (print - ('#'|']'|'['|'='|'"'|whitespace))+	>{ts = p;};
+	tablename_in_double_quotes =  (print - '"')+				>{ts = p;};
+	tablename_in_single_quotes =  (print - "'")+				>{ts = p;};
 
 	action saw_key {
 		struct toml_table_item* item = NULL;
 		list_for_each(&cur_table->value.map, item, map) {
-			if (strncmp(item->node.name, ts, namelen) != 0)
+			if (strncmp(item->node.name, ts, namelen + 1) != 0)
 				continue;
 
 			asprintf(&parse_error,
@@ -494,8 +498,12 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 
 		# a table
 		table: (
-			tablename ']' @saw_table				->start	|
-			'[' tablename ']' ']' @saw_table_array	->start
+			tablename ']' @saw_table										->start	|
+			'"' tablename_in_double_quotes '"' @saw_table ']'				->start	|
+			"'" tablename_in_single_quotes "'" @saw_table ']'				->start	|
+			'[' tablename ']' ']' @saw_table_array							->start	|
+			'[' '"' tablename_in_double_quotes '"' ']' @saw_table_array ']'	->start	|
+			'[' "'" tablename_in_single_quotes "'" ']' @saw_table_array ']'	->start
 		),
 
 		# the boolean data type
@@ -691,7 +699,9 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 
 		# A regular key
 		key: (
-			name @{namelen = (int)(p-ts);} whitespace '=' $saw_key ->val
+			name @{namelen = (int)(p-ts);} whitespace '=' $saw_key								->val	|
+			'"' name_in_double_quotes '"' @{namelen = (int)(p-ts-1);} whitespace '=' $saw_key	->val	|
+			"'" name_in_single_quotes "'" @{namelen = (int)(p-ts-1);} whitespace '=' $saw_key	->val
 		),
 
 		# Text stripped of leading whitespace
