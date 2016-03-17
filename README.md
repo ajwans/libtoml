@@ -32,20 +32,11 @@ toml_free(root);
 Building it
 ===========
 
-Building libtoml requires ragel (the parser generator) and libicu for unicode support.
+Building libtoml requires cmake, ragel (the parser generator) and libicu for unicode support.
 
 ```sh
-> autoconf
-> ./configure
+> cmake -G "Unix Makefiles" .
 > make
-```
-
-If you want to run the tests
-
-```sh
-> ./configure --with-cunit=<path_to_cunit>
-> make test
-> ./test
 ```
 
 Testing it
@@ -55,6 +46,7 @@ Compatible with [toml-test](https://github.com/BurntSushi/toml-test) when invoke
 as 'parser_test'
 
 ```sh
+> ln -s main parser_test
 > $GOPATH/bin/toml-test $PWD/parser_test
 ```
 
