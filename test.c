@@ -340,10 +340,34 @@ testRFC3339(void)
 
 		result = toml_value_as_string(node);
 		CU_ASSERT(memcmp(result, results[i].rfc3339_str, strlen(results[i].rfc3339_str)) == 0);
-		free(result);
 
 		toml_free(root);
 	}
+}
+
+static void
+testInlineTable(void)
+{
+	int					ret;
+	struct toml_node*	root;
+	struct toml_node*	node = NULL;
+	char*				inlineTable = "name = { first = \"Tom\", last = \"Preston-Werner\" }";
+	char*				result = NULL;
+
+	toml_init(&root);
+
+	ret = toml_parse(root, inlineTable, strlen(inlineTable));
+	CU_ASSERT(ret == 0);
+
+	node = toml_get(root, "name.first");
+	CU_ASSERT(node != NULL);
+	CU_ASSERT(node->type == TOML_STRING);
+
+	result = toml_value_as_string(node);
+	CU_ASSERT(result != NULL);
+	CU_ASSERT(memcmp(result, "Tom", strlen("Tom")) == 0);
+
+	toml_free(root);
 }
 
 static void
@@ -432,6 +456,9 @@ int main(void)
 		goto out;
 
 	if ((NULL == CU_add_test(pSuite, "test RFC3339 dates", testRFC3339)))
+		goto out;
+
+	if ((NULL == CU_add_test(pSuite, "test inline table", testInlineTable)))
 		goto out;
 
 	CU_basic_set_mode(CU_BRM_VERBOSE);

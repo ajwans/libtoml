@@ -36,7 +36,6 @@ toml_type_to_str(enum toml_type type)
 		return "unknown toml type";
 	}
 #undef CASE_ENUM_TO_STR
-	return "unknown toml type";
 }
 
 static size_t
@@ -128,7 +127,7 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 	name = (print - ('#'|'='|'"'|whitespace))+					>{ts = p;};
 	name_in_double_quotes = (print - '"')+						>{ts = p;};
 	name_in_single_quotes = (print - "'")+						>{ts = p;};
-	tablename =  (print - ('#'|']'|'['|'='|'"'|whitespace))+	>{ts = p;};
+	tablename =  (print - ('#'|']'|'['|'"'|whitespace))+		>{ts = p;};
 	tablename_in_double_quotes =  (print - '"')+				>{ts = p;};
 	tablename_in_single_quotes =  (print - "'")+				>{ts = p;};
 
@@ -163,6 +162,8 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 					list_tail(&list_stack, struct toml_stack_item, list);
 		if (cur_list)
 			fnext list;
+		else if (inline_table)
+			fnext inline_table;
 	}
 
 	action saw_int {
@@ -179,6 +180,8 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 					list_tail(&list_stack, struct toml_stack_item, list);
 		if (cur_list)
 			fnext list;
+		else if (inline_table)
+			fnext inline_table;
 	}
 
 	action saw_float {
@@ -203,6 +206,8 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 					list_tail(&list_stack, struct toml_stack_item, list);
 		if (cur_list)
 			fnext list;
+		else if (inline_table)
+			fnext inline_table;
 	}
 
 	action saw_string {
@@ -226,6 +231,8 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 					list_tail(&list_stack, struct toml_stack_item, list);
 		if (cur_list)
 			fnext list;
+		else if (inline_table)
+			fnext inline_table;
 	}
 
 	action saw_date {
@@ -249,6 +256,8 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 					list_tail(&list_stack, struct toml_stack_item, list);
 		if (cur_list)
 			fnext list;
+		else if (inline_table)
+			fnext inline_table;
 	}
 
 	action start_list {
@@ -318,15 +327,56 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 
 		if (!list_empty(&list_stack))
 			fnext list;
+		else if (inline_table)
+			fnext inline_table;
+	}
+
+	action saw_inline_table {
+		char*					tablename = name;
+		struct toml_table_item*	item;
+		struct toml_node*		place = cur_table ? cur_table : toml_root;
+		bool					found = false;
+
+		inline_table = true;
+
+		list_for_each(&place->value.map, item, map) {
+			if (strcmp(item->node.name, tablename) != 0)
+				continue;
+
+			found = true;
+			break;
+		}
+
+		if (found)
+		{
+			asprintf(&parse_error, "duplicate entry %s\n", tablename);
+			fbreak;
+		}
+
+		item = malloc(sizeof(*item));
+		if (!item) {
+			malloc_error = 1;
+			fbreak;
+		}
+
+		item->node.name = strdup(tablename);
+		item->node.type = TOML_TABLE;
+		list_head_init(&item->node.value.map);
+		list_add_tail(&place->value.map, &item->map);
+
+		cur_table = &item->node;
+
+		free(tablename);
 	}
 
 	action saw_table {
-		char *ancestor, *tofree, *tablename;
+		char *ancestor, *tofree = NULL, *tablename;
 		int item_added = 0;
+		int len = (int)(p-ts);
 
 		struct toml_node *place = toml_root;
 
-		tofree = tablename = strndup(ts, (int)(p-ts));
+		tofree = tablename = strndup(ts, len);
 
 		while ((ancestor = strsep(&tablename, "."))) {
 			struct toml_table_item *item = NULL;
@@ -364,13 +414,12 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 		}
 
 		if (!item_added) {
-			asprintf(&parse_error, "Duplicate item %.*s", (int)(p-ts), ts);
+			asprintf(&parse_error, "Duplicate item %.*s", len, ts);
 			fbreak;
 		}
 
 		if (place->type != TOML_TABLE) {
-			asprintf(&parse_error, "Attempt to overwrite table %.*s",
-															(int)(p-ts), ts);
+			asprintf(&parse_error, "Attempt to overwrite table %.*s", len, ts);
 			fbreak;
 		}
 
@@ -687,14 +736,22 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 			[^#\t, \n\]] ${fhold;}		->val
 		),
 
+		inline_table: (
+			','								-> inline_table |
+			[\t ]							-> inline_table |
+			'}'	@{inline_table = false;}	-> start		|
+			[^\t ,}] @{fhold;}				-> key
+		),
+
 		# A val can be either a list or a singular value
 		val: (
-			'#'	>{fcall comment;}		->val		|
-			'\n' ${ cur_line++; }		->val		|
-			[\t ]						->val		|
-			'['	$start_list				->list		|
-			']'	$end_list				->start		|
-			[^#\t \n[\]] ${fhold;}		->singular
+			'#'	>{fcall comment;}	->val			|
+			'\n' ${ cur_line++; }	->val			|
+			[\t ]					->val			|
+			'['	$start_list			->list			|
+			']'	$end_list			->start			|
+			'{'	$saw_inline_table	->inline_table	|
+			[^#\t \n[\]{] ${fhold;}	->singular
 		)
 
 		# A regular key
@@ -741,6 +798,7 @@ toml_parse(struct toml_node* toml_root, char* buf, int buflen)
 	char* secfrac_ptr;
 	bool time_offset_is_negative = 0;
 	bool time_offset_is_zulu = 0;
+	bool inline_table = false;
 
 	struct toml_node *cur_table = toml_root;
 
