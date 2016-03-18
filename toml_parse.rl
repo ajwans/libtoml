@@ -194,10 +194,12 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 		node.value.floating.value = floating;
 		node.value.floating.precision = precision;
 
-		if (precision == 0) {
+		if (!node.value.floating.precision && !exponent) {
 			asprintf(&parse_error, "bad float\n");
 			fbreak;
 		}
+
+		exponent = 0;
 
 		if (!add_node_to_tree(&list_stack, cur_table, &node, name, &parse_error, &malloc_error, cur_line))
 			fbreak;
@@ -639,14 +641,21 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 		number_or_date: (
 			'_' ? digit ${number *= 10; number += fc-'0';}	->number_or_date	|
 			'-'	${tm.tm_year = number - 1900;}				->date				|
-			'.'	>{precision = 0;}							->fractional_part	|
+			[eE]											->exponent_part		|
+			[.]	>{precision = 0;}							->fractional_part	|
 			[\t ,\]\n\0] $saw_int ${fhold;}					->start
 		),
 
 		# Fractional part of a double
 		fractional_part: (
-			[0-9]	${precision++;}			->fractional_part |
-			[^0-9]	$saw_float ${fhold;}	->start
+			[0-9]	${precision++;}				->fractional_part	|
+			[eE]								->exponent_part		|
+			[^0-9eE]	$saw_float ${fhold;}	->start
+		),
+
+		exponent_part: (
+			[\-\+0-9]	${exponent=true;}		->exponent_part	|
+			[^\-\+0-9]	$saw_float ${fhold;}	->start
 		),
 
 		# Zulu date, we've already picked up the first four digits and the '-'
@@ -783,7 +792,8 @@ toml_parse(struct toml_node* toml_root, char* buf, int buflen)
 	char *p, *pe;
 	char *ts;
 	char string[1024], *strp;
-	int precision, namelen;
+	int precision;
+	int namelen;
 	int64_t number;
 	bool negative;
 	struct tm tm;
@@ -799,6 +809,7 @@ toml_parse(struct toml_node* toml_root, char* buf, int buflen)
 	bool time_offset_is_negative = 0;
 	bool time_offset_is_zulu = 0;
 	bool inline_table = false;
+	int exponent = 0;
 
 	struct toml_node *cur_table = toml_root;
 
