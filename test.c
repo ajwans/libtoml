@@ -340,6 +340,7 @@ testRFC3339(void)
 
 		result = toml_value_as_string(node);
 		CU_ASSERT(memcmp(result, results[i].rfc3339_str, strlen(results[i].rfc3339_str)) == 0);
+		free(result);
 
 		toml_free(root);
 	}
@@ -366,6 +367,16 @@ testInlineTable(void)
 	result = toml_value_as_string(node);
 	CU_ASSERT(result != NULL);
 	CU_ASSERT(memcmp(result, "Tom", strlen("Tom")) == 0);
+	free(result);
+
+	node = toml_get(root, "name.last");
+	CU_ASSERT(node != NULL);
+	CU_ASSERT(node->type == TOML_STRING);
+
+	result = toml_value_as_string(node);
+	CU_ASSERT(result != NULL);
+	CU_ASSERT(memcmp(result, "Preston-Werner", strlen("Preston-Werner")) == 0);
+	free(result);
 
 	toml_free(root);
 }
