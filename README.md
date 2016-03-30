@@ -17,11 +17,11 @@ char *buf = "[foo]\nbar = 1\n";
 char *value;
 
 toml_init(&root);
-toml_parse(toml_root, buf, len);
+toml_parse(root, buf, len);
 
-node = toml_get(toml_root, "foo.bar");
+node = toml_get(root, "foo.bar");
 
-toml_dump(toml_root, stdout);
+toml_dump(root, stdout);
 
 value = toml_value_as_string(node);
 free(value);
