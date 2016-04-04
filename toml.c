@@ -320,9 +320,8 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 			list_tail(&toml_node->value.map, struct toml_table_item, map);
 
 		list_for_each(&toml_node->value.map, item, map) {
-			_toml_tojson(&item->node, output, indent);
-			if (item != tail)
-				fprintf(output, ", ");
+			_toml_tojson(&item->node, output, indent+1);
+			fprintf(output, "%s\n", item != tail ? "," : "");
 		}
 		break;
 	}
@@ -338,10 +337,12 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 
 		list_for_each(&toml_node->value.map, item, map) {
 			_toml_tojson(&item->node, output, indent+1);
-			if (item != tail)
-				fprintf(output, ", ");
+			fprintf(output, "%s\n", item != tail ? "," : "");
 		}
-		fprintf(output, "}\n");
+
+		for (i = 0; i < indent - 1; i++)
+			fprintf(output, "\t");
+		fprintf(output, "}");
 		break;
 	}
 
@@ -355,12 +356,12 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 
 		list_for_each(&toml_node->value.list, item, list) {
 			_toml_tojson(&item->node, output, indent+1);
-			if (item != tail)
-				fprintf(output, ", ");
+			fprintf(output, "%s\n", item != tail ? "," : "");
 		}
 
-		fprintf(output, " ]\n}\n");
-
+		for (i = 0; i < indent - 1; i++)
+			fprintf(output, "\t");
+		fprintf(output, " ] }");
 		break;
 	}
 
@@ -377,19 +378,20 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 		break;
 
 	case TOML_TABLE_ARRAY: {
-		struct toml_list_item *item = NULL;
-		struct toml_list_item *tail =
-			list_tail(&toml_node->value.list, struct toml_list_item, list);
+		struct toml_table_item *item = NULL;
+		struct toml_table_item *tail =
+			list_tail(&toml_node->value.map, struct toml_table_item, map);
 
 		_output_name(toml_node, output);
 		fprintf(output, "[\n");
 
-		list_for_each(&toml_node->value.list, item, list) {
+		list_for_each(&toml_node->value.map, item, map) {
 			_toml_tojson(&item->node, output, indent+1);
-			if (item != tail)
-				fprintf(output, ", ");
+			fprintf(output, "%s\n", item != tail ? "," : "");
 		}
 
+		for (i = 0; i < indent - 1; i++)
+			fprintf(output, "\t");
 		fprintf(output, "]");
 		break;
 	}
