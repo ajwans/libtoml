@@ -5,6 +5,8 @@
 #include <sys/types.h>
 #include <ccan/list/list.h>
 
+#include "toml.h"
+
 struct toml_node {
 	enum toml_type type;
 	char *name;
@@ -36,5 +38,7 @@ struct toml_list_item {
 	struct list_node list;
 	struct toml_node node;
 };
+
+int SawTableArray(struct toml_node*, char*, struct toml_node**, char**);
 
 #endif /* _TOML_PRIVATE_H */

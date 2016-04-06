@@ -199,7 +199,7 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 			fbreak;
 		}
 
-		exponent = 0;
+		exponent = false;
 
 		if (!add_node_to_tree(&list_stack, cur_table, &node, name, &parse_error, &malloc_error, cur_line))
 			fbreak;
@@ -431,73 +431,14 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 	}
 
 	action saw_table_array {
-		char *ancestor, *tofree, *tablename;
+		int		ret;
+		char*	tableName;
 
-		struct toml_node *place = toml_root;
-		struct toml_list_item *new_table_entry = NULL;
-
-		tofree = tablename = strndup(ts, (int)(p-ts-1));
-
-		while ((ancestor = strsep(&tablename, "."))) {
-			struct toml_table_item *item = NULL;
-			int found = 0;
-
-			list_for_each(&place->value.map, item, map) {
-				if (!item->node.name)
-					continue;
-				
-				if (strcmp(item->node.name, ancestor) == 0) {
-					place = &item->node;
-					found = 1;
-					break;
-				}
-			}
-
-			if (found)
-				continue;
-
-			/* this is the auto-vivification */
-
-			/*
-			 * Create a table array node and insert it into the heirarchy
-			 */
-			item = malloc(sizeof(*item));
-			if (!item) {
-				malloc_error = 1;
-				fbreak;
-			}
-			item->node.name = strdup(ancestor);
-			item->node.type = TOML_TABLE_ARRAY;
-			list_head_init(&item->node.value.list);
-			list_add_tail(&place->value.map, &item->map);
-
-			place = &item->node;
-		}
-
-		if (place->type != TOML_TABLE_ARRAY) {
-			asprintf(&parse_error, "Attempt to overwrite table %.*s",
-															(int)(p-ts), ts);
+		tableName = strndup(ts, (int)(p-ts-1));
+		ret = SawTableArray(toml_root, tableName, &cur_table, &parse_error);
+		free(tableName);
+		if (ret)
 			fbreak;
-		}
-
-		free(tofree);
-
-		/*
-		 * Create a table which becomes the last element in the list
-		 * of maps (table array is a list of maps)
-		 */
-		new_table_entry = malloc(sizeof(*new_table_entry));
-		if (!new_table_entry) {
-			malloc_error = 1;
-			fbreak;
-		}
-
-		new_table_entry->node.type = TOML_TABLE;
-		new_table_entry->node.name = NULL;
-		list_head_init(&new_table_entry->node.value.map);
-		list_add_tail(&place->value.list, &new_table_entry->list);
-
-		cur_table = &new_table_entry->node;
 	}
 
 	action saw_utf16 {
@@ -809,7 +750,7 @@ toml_parse(struct toml_node* toml_root, char* buf, int buflen)
 	bool time_offset_is_negative = 0;
 	bool time_offset_is_zulu = 0;
 	bool inline_table = false;
-	int exponent = 0;
+	bool exponent = false;
 
 	struct toml_node *cur_table = toml_root;
 
