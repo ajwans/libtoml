@@ -372,20 +372,20 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 	case TOML_BOOLEAN:
 		value = toml_value_as_string(toml_node);
 		_output_name(toml_node, output);
-		fprintf(output, "{ \"type\": \"%s\", \"value\": \"%s\" }\n",
+		fprintf(output, "{ \"type\": \"%s\", \"value\": \"%s\" }",
 									toml_json_types[toml_node->type], value);
 		free(value);
 		break;
 
 	case TOML_TABLE_ARRAY: {
-		struct toml_table_item *item = NULL;
-		struct toml_table_item *tail =
-			list_tail(&toml_node->value.map, struct toml_table_item, map);
+		struct toml_list_item *item = NULL;
+		struct toml_list_item *tail =
+			list_tail(&toml_node->value.list, struct toml_list_item, list);
 
 		_output_name(toml_node, output);
 		fprintf(output, "[\n");
 
-		list_for_each(&toml_node->value.map, item, map) {
+		list_for_each(&toml_node->value.list, item, list) {
 			_toml_tojson(&item->node, output, indent+1);
 			fprintf(output, "%s\n", item != tail ? "," : "");
 		}

@@ -1,29 +1,89 @@
 #include "toml_private.h"
 
+#include <ccan/list/list.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 
-int SawTableArray(struct toml_node* root, char* tableArrayName, struct toml_node** lastTable, char** err)
+const char *
+toml_type_to_str(enum toml_type type)
 {
-	char *ancestor;
+#define CASE_ENUM_TO_STR(x) case(x): return #x
+	switch (type) {
+	CASE_ENUM_TO_STR(TOML_ROOT);
+	CASE_ENUM_TO_STR(TOML_TABLE);
+	CASE_ENUM_TO_STR(TOML_LIST);
+	CASE_ENUM_TO_STR(TOML_INT);
+	CASE_ENUM_TO_STR(TOML_FLOAT);
+	CASE_ENUM_TO_STR(TOML_STRING);
+	CASE_ENUM_TO_STR(TOML_DATE);
+	CASE_ENUM_TO_STR(TOML_BOOLEAN);
+	CASE_ENUM_TO_STR(TOML_TABLE_ARRAY);
+	default:
+		return "unknown toml type";
+	}
+#undef CASE_ENUM_TO_STR
+}
 
-	struct toml_node *place = root;
-	struct toml_table_item *new_table_entry = NULL;
+static struct toml_node*
+InsertAnonymousTable(struct toml_node* place)
+{
+	struct toml_table_item* new_table;
+	new_table = malloc(sizeof(*new_table));
+	new_table->node.type = TOML_TABLE;
+	new_table->node.name = NULL;
+	list_head_init(&new_table->node.value.map);
+	list_add_tail(&place->value.list, &new_table->map);
+	return &new_table->node;
+}
+
+static struct toml_node*
+InsertTableArray(char* name, struct toml_node* place)
+{
+	struct toml_table_item* item;
+
+	item = malloc(sizeof(*item));
+	item->node.type = TOML_TABLE_ARRAY;
+	item->node.name = strdup(name);
+	list_head_init(&item->node.value.list);
+	list_add_tail(&place->value.map, &item->map);
+
+	return InsertAnonymousTable(&item->node);
+}
+
+int
+SawTableArray(struct toml_node* root, char* tableArrayName, struct toml_node** lastTable, char** err)
+{
+	char*					ancestor;
+	bool					found = false;
+	struct toml_table_item*	item;
+	struct toml_node*		place;
+
+	if (root->type != TOML_ROOT)
+		return 1;
+
+	/*
+	 * A table array is a list of anonymous tables.  Every time we see [[<table>]]
+	 * we should first instantiate <table> if it does not already exist.  Once we
+	 * have <table> we must add a new anonymous TOML_TABLE and set it to be the
+	 * current table.
+	 */
+	place = root;
 
 	while ((ancestor = strsep(&tableArrayName, "."))) {
-		struct toml_table_item *item = NULL;
-		struct toml_list_item* new_entry = NULL;
-		int found = 0;
+		found = false;
 
 		list_for_each(&place->value.map, item, map) {
 			if (!item->node.name)
 				continue;
-			
-			if (strcmp(item->node.name, ancestor) == 0) {
-				place = &item->node;
-				found = 1;
+
+			if (!strcmp(item->node.name, ancestor))
+			{
+				struct toml_list_item* last;
+				last = list_tail(&item->node.value.list, struct toml_list_item, list);
+				place = &last->node;
+				found = true;
 				break;
 			}
 		}
@@ -31,46 +91,14 @@ int SawTableArray(struct toml_node* root, char* tableArrayName, struct toml_node
 		if (found)
 			continue;
 
-		/* this is the auto-vivification */
-
-		fprintf(stderr, "making %s\n", ancestor);
-		/*
-		 * Create a table array node and insert it into the heirarchy
-		 */
-		new_entry = malloc(sizeof(*new_entry));
-		if (!item) {
-			asprintf(err, "malloc error: %s", strerror(errno));
-			return -1;
-		}
-		new_entry->node.name = strdup(ancestor);
-		new_entry->node.type = TOML_TABLE_ARRAY;
-		list_head_init(&new_entry->node.value.list);
-		list_add_tail(&place->value.list, &new_entry->list);
-
-		place = &new_entry->node;
+		/* this is the instantiation of <table> or one of its sub-parts */
+		place = InsertTableArray(ancestor, place);
+		*lastTable = place;
 	}
 
-	if (place->type != TOML_TABLE_ARRAY) {
-		asprintf(err, "Attempt to overwrite table %s", tableArrayName);
-		return -2;
-	}
+	/* This is the creation of an anoymous table once we reach the base of tableArrayName */
+	if (found)
+		*lastTable = InsertAnonymousTable(&item->node);
 
-	/*
-	 * Create a table which becomes the last element in the list
-	 * of maps (table array is a list of maps)
-	 */
-	new_table_entry = malloc(sizeof(*new_table_entry));
-	if (!new_table_entry) {
-		asprintf(err, "malloc error: %s", strerror(errno));
-		return -1;
-	}
-
-	fprintf(stderr, "creating table in ta %s\n", place->name);
-	new_table_entry->node.type = TOML_TABLE;
-	new_table_entry->node.name = NULL;
-	list_head_init(&new_table_entry->node.value.map);
-	list_add_tail(&place->value.list, &new_table_entry->map);
-
-	*lastTable = &new_table_entry->node;
 	return 0;
 }

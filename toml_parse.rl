@@ -18,26 +18,6 @@ struct toml_stack_item {
 	struct toml_node *node;
 };
 
-static const char *
-toml_type_to_str(enum toml_type type)
-{
-#define CASE_ENUM_TO_STR(x) case(x): return #x
-	switch (type) {
-	CASE_ENUM_TO_STR(TOML_ROOT);
-	CASE_ENUM_TO_STR(TOML_TABLE);
-	CASE_ENUM_TO_STR(TOML_LIST);
-	CASE_ENUM_TO_STR(TOML_INT);
-	CASE_ENUM_TO_STR(TOML_FLOAT);
-	CASE_ENUM_TO_STR(TOML_STRING);
-	CASE_ENUM_TO_STR(TOML_DATE);
-	CASE_ENUM_TO_STR(TOML_BOOLEAN);
-	CASE_ENUM_TO_STR(TOML_TABLE_ARRAY);
-	default:
-		return "unknown toml type";
-	}
-#undef CASE_ENUM_TO_STR
-}
-
 static size_t
 utf32ToUTF8(char* dst, int len, uint32_t utf32)
 {
