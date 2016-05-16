@@ -682,7 +682,7 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 			']'	$end_list			->start			|
 			'{'	$saw_inline_table	->inline_table	|
 			[^#\t \n[\]{] ${fhold;}	->singular
-		)
+		),
 
 		# A regular key
 		key: (
