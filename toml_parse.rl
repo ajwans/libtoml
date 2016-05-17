@@ -458,10 +458,10 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 	lines = (
 		start: (
 			# count the indentation to know where the tables end
-			'#'			>{in_text = 0; fcall comment;}				->start	|
-			[\t ]+		>{in_text = 0; indent = 0;} @{indent++;}	->start	|
-			[\n]		>{in_text = 0; cur_line++;}					->start	|
-			[\0]		>{in_text = 0; fbreak;}						->start	|
+			'#'			>{in_text = 0; fcall comment;}				->start			|
+			[\t ]+		>{in_text = 0; indent = 0;} ${indent++;}	@{fgoto start;}	|
+			[\n]		>{in_text = 0; cur_line++;}					@{fgoto start;}	|
+			[\0]		>{in_text = 0; fbreak;}						@{fgoto start;}	|
 			[^\t \n]	@{fhold;} %{in_text = 1;}					->text
 		),
 
@@ -493,15 +493,15 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 		),
 
 		basic_multi_line_start: (
-			'\n' ${cur_line++;}	-> basic_multi_line |
+			'\n' ${cur_line++;}	-> basic_multi_line	|
 			[^\n] ${fhold;}		-> basic_multi_line
 		),
 
 		basic_multi_line: (
 			["]										-> basic_multi_line_quote	|
-			[\n]		${cur_line++;*strp++=fc;}	-> basic_multi_line			|
+			[\n]		${cur_line++;*strp++=fc;}	@{fgoto basic_multi_line;}	|
 			[\\]									-> basic_multi_line_escape	|
-			[^"\n\\]	${*strp++=fc;}				-> basic_multi_line
+			[^"\n\\]	${*strp++=fc;}				@{fgoto basic_multi_line;}
 		),
 
 		basic_multi_line_escape: (
@@ -510,8 +510,8 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 		),
 
 		basic_multi_line_rm_ws: (
-			[\n]	${cur_line++;}	-> basic_multi_line_rm_ws |
-			[ \t]					-> basic_multi_line_rm_ws |
+			[\n]	${cur_line++;}	@{fgoto basic_multi_line_rm_ws;}	|
+			[ \t]					@{fgoto basic_multi_line_rm_ws;}	|
 			[^ \t\n]	${fhold;}	-> basic_multi_line
 		),
 
@@ -528,10 +528,10 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 		# String, we have to escape \0, \t, \n, \r, everything else can
 		# be prefixed with a slash and the slash just gets dropped
 		basic_string_contents: (
-			'"'			$saw_string					-> start					|
-			[\n]		${cur_line++; *strp++=fc;}	-> basic_string_contents	|
-			[\\]		${fcall str_escape;}		-> basic_string_contents	|
-			[^"\n\\]	${*strp++=fc;}				-> basic_string_contents
+			'"'			$saw_string					-> start						|
+			[\n]		${cur_line++; *strp++=fc;}	@{fgoto basic_string_contents;}	|
+			[\\]		${fcall str_escape;}		-> basic_string_contents		|
+			[^"\n\\]	${*strp++=fc;}				@{fgoto basic_string_contents;}
 		),
 
 		str_escape: (
@@ -560,22 +560,22 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 		# When we don't know yet if this is going to be a date or a number
 		# this is the state
 		number_or_date: (
-			'_' ? digit ${number *= 10; number += fc-'0';}	->number_or_date	|
-			'-'	${tm.tm_year = number - 1900;}				->date				|
-			[eE]											->exponent_part		|
-			[.]	>{precision = 0;}							->fractional_part	|
+			'_' ? digit ${number *= 10; number += fc-'0';}	@{fgoto number_or_date;}	|
+			'-'	${tm.tm_year = number - 1900;}				->date						|
+			[eE]											->exponent_part				|
+			[.]	>{precision = 0;}							->fractional_part			|
 			[\t ,\]\n\0] $saw_int ${fhold;}					->start
 		),
 
 		# Fractional part of a double
 		fractional_part: (
-			[0-9]	${precision++;}				->fractional_part	|
-			[eE]								->exponent_part		|
+			[0-9]	${precision++;}				@{fgoto fractional_part;}	|
+			[eE]								->exponent_part				|
 			[^0-9eE]	$saw_float ${fhold;}	->start
 		),
 
 		exponent_part: (
-			[\-\+0-9]	${exponent=true;}		->exponent_part	|
+			[\-\+0-9]	${exponent=true;}		@{fgoto exponent_part;}	|
 			[^\-\+0-9]	$saw_float ${fhold;}	->start
 		),
 
@@ -613,8 +613,8 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 		),
 
 		literal_string_contents: (
-			[']		$saw_string		->start						|
-			[^']	${*strp++=fc;}	->literal_string_contents
+			[']		$saw_string		->start	|
+			[^']	${*strp++=fc;}	@{fgoto literal_string_contents;}
 		),
 
 		literal_empty_or_multi_line: (
@@ -628,9 +628,9 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 		),
 
 		literal_multi_line: (
-			[']									-> literal_multi_line_quote	|
-			[\n]	${cur_line++;*strp++=fc;}	-> literal_multi_line		|
-			[^'\n]	${*strp++=fc;}				-> literal_multi_line
+			[']									-> literal_multi_line_quote		|
+			[\n]	${cur_line++;*strp++=fc;}	@{fgoto literal_multi_line;}	|
+			[^'\n]	${*strp++=fc;}				@{fgoto literal_multi_line;}
 		),
 
 		# saw 1 quote, if there's not another one go back to literalMultiLine
@@ -658,30 +658,30 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 
 		# A list of values
 		list: (
-			'#'		>{fcall comment;}	->list	|
-			'\n'	${cur_line++;}		->list	|
-			[\t ]						->list	|
-			','							->list	|
-			']'	$end_list				->start	|
+			'#'		>{fcall comment;}	->list			|
+			'\n'	${cur_line++;}		@{fgoto list;}	|
+			[\t ]						@{fgoto list;}	|
+			','							@{fgoto list;}	|
+			']'	$end_list				->start			|
 			[^#\t, \n\]] ${fhold;}		->val
 		),
 
 		inline_table: (
-			','								-> inline_table |
-			[\t ]							-> inline_table |
-			'}'	@{inline_table = false;}	-> start		|
+			','								@{fgoto inline_table;}	|
+			[\t ]							@{fgoto inline_table;}	|
+			'}'	@{inline_table = false;}	-> start				|
 			[^\t ,}] @{fhold;}				-> key
 		),
 
 		# A val can be either a list or a singular value
 		val: (
-			'#'	>{fcall comment;}	->val			|
-			'\n' ${ cur_line++; }	->val			|
-			[\t ]					->val			|
-			'['	$start_list			->list			|
-			']'	$end_list			->start			|
-			'{'	$saw_inline_table	->inline_table	|
-			[^#\t \n[\]{] ${fhold;}	->singular
+			'#'				>{fcall comment;}	->val				|
+			'\n'+			${ cur_line++; }	@{fgoto val;}		|
+			[\t ]								@{fgoto val;}		|
+			'['				$start_list			->list				|
+			']'				$end_list			->start				|
+			'{'				$saw_inline_table	->inline_table		|
+			[^#\t \n[\]{]	${fhold;}			->singular
 		),
 
 		# A regular key
@@ -693,10 +693,10 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 
 		# Text stripped of leading whitespace
 		text: (
-			'#'	>{fcall comment;}	->text	|
-			'['						->table	|
-			[\t ]					->text	|
-			'\n' ${cur_line++;}		->start	|
+			'#'	>{fcall comment;}	->text			|
+			'['						->table			|
+			[\t ]					@{fgoto text;}	|
+			'\n' ${cur_line++;}		->start			|
 			[^#[\t \n]	${fhold;}	->key
 		)
 	);
