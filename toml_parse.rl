@@ -370,6 +370,9 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 			}
 
 			list_for_each(&place->value.map, item, map) {
+				if (!item->node.name)
+					continue;
+
 				if (strcmp(item->node.name, ancestor) == 0) {
 					place = &item->node;
 					found = 1;
@@ -679,9 +682,8 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 			'\n'+			${ cur_line++; }	@{fgoto val;}		|
 			[\t ]								@{fgoto val;}		|
 			'['				$start_list			->list				|
-			']'				$end_list			->start				|
 			'{'				$saw_inline_table	->inline_table		|
-			[^#\t \n[\]{]	${fhold;}			->singular
+			[^#\t \n[{]	${fhold;}				->singular
 		),
 
 		# A regular key

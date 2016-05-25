@@ -382,6 +382,25 @@ testInlineTable(void)
 }
 
 static void
+testJunkInputs(void)
+{
+	int					ret;
+	struct toml_node*	root;
+	char*				junkInput1 = "a=]";
+	char*				junkInput2 = "[[a]]\n[a.a]";
+
+	toml_init(&root);
+	ret = toml_parse(root, junkInput1, strlen(junkInput1));
+	CU_ASSERT(ret != 0);
+	toml_free(root);
+
+	toml_init(&root);
+	ret = toml_parse(root, junkInput2, strlen(junkInput2));
+	CU_ASSERT(ret != 0);
+	toml_free(root);
+}
+
+static void
 mmapAndParse(char *path, int expected)
 {
 	int					fd, ret;
@@ -470,6 +489,9 @@ int main(void)
 		goto out;
 
 	if ((NULL == CU_add_test(pSuite, "test inline table", testInlineTable)))
+		goto out;
+
+	if ((NULL == CU_add_test(pSuite, "test junk inputs", testJunkInputs)))
 		goto out;
 
 	CU_basic_set_mode(CU_BRM_VERBOSE);
