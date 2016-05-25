@@ -150,6 +150,8 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 		char*				te = p;
 		struct toml_node	node;
 
+		fhold;
+
 		node.type = TOML_INT;
 		node.value.integer = negative ? -number : number;
 
@@ -167,6 +169,8 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 	action saw_float {
 		char*				te = p;
 		struct toml_node	node;
+
+		fhold;
 
 		floating = strtod(ts, &te);
 
@@ -567,19 +571,19 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 			'-'	${tm.tm_year = number - 1900;}				->date						|
 			[eE]											->exponent_part				|
 			[.]	>{precision = 0;}							->fractional_part			|
-			[\t ,\]\n\0] $saw_int ${fhold;}					->start
+			[\t ,}\]\n\0] $saw_int							->start
 		),
 
 		# Fractional part of a double
 		fractional_part: (
-			[0-9]	${precision++;}				@{fgoto fractional_part;}	|
-			[eE]								->exponent_part				|
-			[^0-9eE]	$saw_float ${fhold;}	->start
+			[0-9]	${precision++;}		@{fgoto fractional_part;}	|
+			[eE]						->exponent_part				|
+			[^0-9eE]	$saw_float 		->start
 		),
 
 		exponent_part: (
-			[\-\+0-9]	${exponent=true;}		@{fgoto exponent_part;}	|
-			[^\-\+0-9]	$saw_float ${fhold;}	->start
+			[\-\+0-9]	${exponent=true;}	@{fgoto exponent_part;}	|
+			[^\-\+0-9]	$saw_float 			->start
 		),
 
 		# Zulu date, we've already picked up the first four digits and the '-'

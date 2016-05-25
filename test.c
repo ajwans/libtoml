@@ -352,7 +352,7 @@ testInlineTable(void)
 	int					ret;
 	struct toml_node*	root;
 	struct toml_node*	node = NULL;
-	char*				inlineTable = "name = { first = \"Tom\", last = \"Preston-Werner\" }";
+	char*				inlineTable = "name = { first = \"Tom\", last = \"Preston-Werner\", x=1}\npoint = { x = 1, y = 2 }";
 	char*				result = NULL;
 
 	toml_init(&root);
@@ -377,6 +377,28 @@ testInlineTable(void)
 	CU_ASSERT(result != NULL);
 	CU_ASSERT(memcmp(result, "Preston-Werner", strlen("Preston-Werner")) == 0);
 	free(result);
+
+	node = toml_get(root, "name.x");
+	CU_ASSERT(node != NULL);
+	CU_ASSERT(node->type == TOML_INT);
+	result = toml_value_as_string(node);
+	CU_ASSERT(result != NULL);
+	CU_ASSERT(strcmp(result, "1") == 0);
+	free(result);
+
+	node = toml_get(root, "point.x");
+	CU_ASSERT(node != NULL);
+	if (node)
+	{
+		CU_ASSERT(node->type == TOML_INT);
+		result = toml_value_as_string(node);
+		CU_ASSERT(result != NULL);
+		if (result)
+		{
+			CU_ASSERT(strcmp(result, "1") == 0);
+			free(result);
+		}
+	}
 
 	toml_free(root);
 }
