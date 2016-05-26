@@ -353,6 +353,7 @@ testInlineTable(void)
 	struct toml_node*	root;
 	struct toml_node*	node = NULL;
 	char*				inlineTable = "name = { first = \"Tom\", last = \"Preston-Werner\", x=1}\npoint = { x = 1, y = 2 }";
+	char*				recursiveInlineTable = "name = { first = \"Tom\", last = \"Preston-Werner\", point = {x=1,y=2}}\npoint = { x = 1, y = 2 }";
 	char*				result = NULL;
 
 	toml_init(&root);
@@ -401,6 +402,23 @@ testInlineTable(void)
 	}
 
 	toml_free(root);
+
+	toml_init(&root);
+
+	ret = toml_parse(root, recursiveInlineTable, strlen(recursiveInlineTable));
+	CU_ASSERT(ret == 0);
+	node = toml_get(root, "name.point.y");
+	CU_ASSERT(node != NULL);
+	if (node)
+	{
+		CU_ASSERT(node->type == TOML_INT);
+		result = toml_value_as_string(node);
+		CU_ASSERT(result != NULL);
+		CU_ASSERT(strcmp(result, "2") == 0);
+		free(result);
+	}
+
+	toml_free(root);
 }
 
 static void
@@ -418,7 +436,7 @@ testJunkInputs(void)
 
 	toml_init(&root);
 	ret = toml_parse(root, junkInput2, strlen(junkInput2));
-	CU_ASSERT(ret != 0);
+	CU_ASSERT(ret == 0);
 	toml_free(root);
 }
 
