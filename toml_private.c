@@ -102,3 +102,66 @@ SawTableArray(struct toml_node* root, char* tableArrayName, struct toml_node** l
 
 	return 0;
 }
+
+int
+SawTable(struct toml_node* place, char* name, struct toml_node** lastTable, char** err)
+{
+	char *ancestor, *tofree = NULL, *tablename;
+	int item_added = 0;
+
+	tofree = tablename = strdup(name);
+	if (!tablename)
+		return ENOMEM;
+
+	while ((ancestor = strsep(&tablename, "."))) {
+		struct toml_table_item *item = NULL;
+		int found = 0;
+
+		if (strcmp(ancestor, "") == 0) {
+			asprintf(err, "empty implicit table");
+			return 1;
+		}
+
+		list_for_each(&place->value.map, item, map) {
+			if (!item->node.name)
+				continue;
+
+			if (strcmp(item->node.name, ancestor) == 0) {
+				place = &item->node;
+				found = 1;
+				break;
+			}
+		}
+
+		if (found)
+			continue;
+
+		/* this is the auto-vivification */
+		item = malloc(sizeof(*item));
+		if (!item)
+			return ENOMEM;
+
+		item->node.name = strdup(ancestor);
+		item->node.type = TOML_TABLE;
+		list_head_init(&item->node.value.map);
+		list_add_tail(&place->value.map, &item->map);
+
+		place = &item->node;
+		item_added = 1;
+	}
+
+	if (!item_added) {
+		asprintf(err, "Duplicate item %s", name);
+		return 2;
+	}
+
+	if (place->type != TOML_TABLE) {
+		asprintf(err, "Attempt to overwrite table %s", name);
+		return 3;
+	}
+
+	free(tofree);
+
+	*lastTable = place;
+	return 0;
+}

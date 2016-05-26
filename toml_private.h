@@ -41,5 +41,6 @@ struct toml_list_item {
 
 const char* toml_type_to_str(enum toml_type);
 int SawTableArray(struct toml_node*, char*, struct toml_node**, char**);
+int SawTable(struct toml_node*, char*, struct toml_node**, char**);
 
 #endif /* _TOML_PRIVATE_H */

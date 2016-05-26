@@ -356,65 +356,17 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 	}
 
 	action saw_table {
-		char *ancestor, *tofree = NULL, *tablename;
-		int item_added = 0;
 		int len = (int)(p-ts);
 
-		struct toml_node *place = toml_root;
+		struct toml_node *place = cur_table ? cur_table : toml_root;
 
-		tofree = tablename = strndup(ts, len);
+		int		result;
+		char*	name = strndup(ts, len);
 
-		while ((ancestor = strsep(&tablename, "."))) {
-			struct toml_table_item *item = NULL;
-			int found = 0;
-
-			if (strcmp(ancestor, "") == 0) {
-				asprintf(&parse_error, "empty implicit table");
-				fbreak;
-			}
-
-			list_for_each(&place->value.map, item, map) {
-				if (!item->node.name)
-					continue;
-
-				if (strcmp(item->node.name, ancestor) == 0) {
-					place = &item->node;
-					found = 1;
-					break;
-				}
-			}
-
-			if (found)
-				continue;
-
-			/* this is the auto-vivification */
-			item = malloc(sizeof(*item));
-			if (!item) {
-				malloc_error = 1;
-				fbreak;
-			}
-			item->node.name = strdup(ancestor);
-			item->node.type = TOML_TABLE;
-			list_head_init(&item->node.value.map);
-			list_add_tail(&place->value.map, &item->map);
-
-			place = &item->node;
-			item_added = 1;
-		}
-
-		if (!item_added) {
-			asprintf(&parse_error, "Duplicate item %.*s", len, ts);
+		result = SawTable(toml_root, name, &cur_table, &parse_error);
+		free(name);
+		if (result)
 			fbreak;
-		}
-
-		if (place->type != TOML_TABLE) {
-			asprintf(&parse_error, "Attempt to overwrite table %.*s", len, ts);
-			fbreak;
-		}
-
-		free(tofree);
-
-		cur_table = place;
 	}
 
 	action saw_table_array {
