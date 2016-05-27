@@ -42,6 +42,9 @@ toml_get(struct toml_node *toml_root, char *key)
 		int found = 0;
 
 		list_for_each(&node->value.map, item, map) {
+			if (!item->node.name)
+				continue;
+							
 			if (strcmp(item->node.name, ancestor) == 0) {
 				node = &item->node;
 				found = 1;
@@ -80,6 +83,7 @@ _toml_dump(struct toml_node *toml_node, FILE *output, char *bname, int indent,
 		break;
 	}
 
+	case TOML_INLINE_TABLE:
 	case TOML_TABLE: {
 		struct toml_table_item *item = NULL;
 		char name[100];
@@ -159,6 +163,7 @@ _toml_process(struct toml_node *node, toml_node_walker fn, enum order order, voi
 
 	switch (node->type) {
 	case TOML_ROOT:
+	case TOML_INLINE_TABLE:
 	case TOML_TABLE: {
 		struct toml_table_item *item = NULL, *next = NULL;
 
@@ -326,6 +331,7 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 		break;
 	}
 
+	case TOML_INLINE_TABLE:
 	case TOML_TABLE: {
 		struct toml_table_item *item = NULL;
 		struct toml_table_item *tail =
@@ -352,7 +358,7 @@ _toml_tojson(struct toml_node *toml_node, FILE *output, int indent)
 			list_tail(&toml_node->value.map, struct toml_list_item, list);
 
 		_output_name(toml_node, output);
-		fprintf(output, "{ \"type\" : \"array\",\n\"value\": [ \n");
+		fprintf(output, "{ \"type\": \"array\", \"value\": [\n");
 
 		list_for_each(&toml_node->value.list, item, list) {
 			_toml_tojson(&item->node, output, indent+1);
@@ -418,6 +424,7 @@ toml_node_walker_free(struct toml_node* node, void* ctx)
 
 	switch (node->type) {
 	case TOML_ROOT:
+	case TOML_INLINE_TABLE:
 	case TOML_TABLE: {
 		struct toml_table_item *item = NULL, *next = NULL;
 

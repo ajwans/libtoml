@@ -17,6 +17,7 @@ enum toml_type {
 	TOML_DATE,
 	TOML_BOOLEAN,
 	TOML_TABLE_ARRAY,
+	TOML_INLINE_TABLE,
 	TOML_MAX
 };
 

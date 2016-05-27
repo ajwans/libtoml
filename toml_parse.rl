@@ -13,10 +13,18 @@
 #include <unicode/ustring.h>
 
 struct toml_stack_item {
-	struct list_node list;
-	enum toml_type list_type;
-	struct toml_node *node;
+	struct list_node	list;
+	enum toml_type		list_type;
+	struct toml_node*	node;
 };
+
+#define PUSH_CONTEXT(x)	list_add_tail(&context_stack, &x->list);
+#define CONTEXT(x)		list_tail(x, struct toml_stack_item, list)
+#define POP_CONTEXT(x)	do { \
+	struct toml_stack_item* context = CONTEXT(&context_stack);	\
+	list_del(&context->list);									\
+	x = context->node;											\
+} while (0)
 
 static size_t
 utf32ToUTF8(char* dst, int len, uint32_t utf32)
@@ -61,20 +69,35 @@ utf32ToUTF8(char* dst, int len, uint32_t utf32)
 	return 4;
 }
 
-bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table, struct toml_node* node, char* name, char** parse_error, int* malloc_error, int cur_line)
+static bool
+add_node_to_tree(struct list_head* context_stack, struct toml_node* node, char* name, char** parse_error, int* malloc_error, int cur_line)
 {
-	struct toml_stack_item *cur_list =
-					list_tail(list_stack, struct toml_stack_item, list);
+	struct toml_stack_item* context = CONTEXT(context_stack);
 
-	if (cur_list) {
-		if (cur_list->list_type && cur_list->list_type != node->type) {
+	switch (context->node->type) {
+	case TOML_ROOT:
+	case TOML_TABLE:
+	case TOML_INLINE_TABLE: {
+		struct toml_table_item *item = malloc(sizeof(*item));
+		if (!item) {
+			*malloc_error = 1;
+			return false;
+		}
+		memcpy(&item->node, node, sizeof(*node));
+		item->node.name = name;
+		list_add_tail(&context->node->value.map, &item->map);
+		break;
+	}
+
+	default:
+		if (context->list_type && context->list_type != node->type) {
 			asprintf(parse_error,
 					"incompatible types list %s this %s line %d\n",
-					toml_type_to_str(cur_list->list_type),
+					toml_type_to_str(context->list_type),
 					toml_type_to_str(node->type), cur_line);
 			return false;
 		}
-		cur_list->list_type = node->type;
+		context->list_type = node->type;
 
 		struct toml_list_item *item = malloc(sizeof(*item));
 		if (!item) {
@@ -84,16 +107,8 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 
 		memcpy(&item->node, node, sizeof(*node));
 		item->node.name = NULL;
-		list_add_tail(&cur_list->node->value.list, &item->list);
-	} else {
-		struct toml_table_item *item = malloc(sizeof(*item));
-		if (!item) {
-			*malloc_error = 1;
-			return false;
-		}
-		memcpy(&item->node, node, sizeof(*node));
-		item->node.name = name;
-		list_add_tail(&cur_table->value.map, &item->map);
+		list_add_tail(&context->node->value.list, &item->list);
+		break;
 	}
 
 	return true;
@@ -113,13 +128,27 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 
 	action saw_key {
 		struct toml_table_item* item = NULL;
-		list_for_each(&cur_table->value.map, item, map) {
+		struct toml_stack_item* context = CONTEXT(&context_stack);
+
+		switch (context->node->type) {
+		case TOML_TABLE:
+		case TOML_ROOT:
+		case TOML_INLINE_TABLE:
+			break;
+
+		default:
+			asprintf(&parse_error, "context error key %.*s line %d\n", namelen + 1, ts, cur_line);
+			fbreak;
+		}
+
+		list_for_each(&context->node->value.map, item, map) {
+			if (!item->node.name)
+				continue;
+			
 			if (strncmp(item->node.name, ts, namelen + 1) != 0)
 				continue;
 
-			asprintf(&parse_error,
-					"duplicate key %s line %d\n",
-					item->node.name, cur_line);
+			asprintf(&parse_error, "duplicate key %s line %d\n", item->node.name, cur_line);
 			fbreak;
 		}
 
@@ -135,35 +164,37 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 		node.type = TOML_BOOLEAN;
 		node.value.integer = number;
 
-		if (!add_node_to_tree(&list_stack, cur_table, &node, name, &parse_error, &malloc_error, cur_line))
+		if (!add_node_to_tree(&context_stack, &node, name, &parse_error, &malloc_error, cur_line))
 			fbreak;
 
-		struct toml_stack_item *cur_list =
-					list_tail(&list_stack, struct toml_stack_item, list);
-		if (cur_list)
+		struct toml_stack_item *context = CONTEXT(&context_stack);
+		if (context->node->type == TOML_LIST)
 			fnext list;
-		else if (inline_table)
+		else if (context->node->type == TOML_INLINE_TABLE)
 			fnext inline_table;
+		else
+			fnext start;
 	}
 
 	action saw_int {
-		char*				te = p;
-		struct toml_node	node;
+		char*					te = p;
+		struct toml_node		node;
+		struct toml_stack_item*	context = CONTEXT(&context_stack);
 
 		fhold;
 
 		node.type = TOML_INT;
 		node.value.integer = negative ? -number : number;
 
-		if (!add_node_to_tree(&list_stack, cur_table, &node, name, &parse_error, &malloc_error, cur_line))
+		if (!add_node_to_tree(&context_stack, &node, name, &parse_error, &malloc_error, cur_line))
 			fbreak;
 
-		struct toml_stack_item *cur_list =
-					list_tail(&list_stack, struct toml_stack_item, list);
-		if (cur_list)
+		if (context->node->type == TOML_LIST)
 			fnext list;
-		else if (inline_table)
+		else if (context->node->type == TOML_INLINE_TABLE)
 			fnext inline_table;
+		else
+			fnext start;
 	}
 
 	action saw_float {
@@ -185,15 +216,16 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 
 		exponent = false;
 
-		if (!add_node_to_tree(&list_stack, cur_table, &node, name, &parse_error, &malloc_error, cur_line))
+		if (!add_node_to_tree(&context_stack, &node, name, &parse_error, &malloc_error, cur_line))
 			fbreak;
 
-		struct toml_stack_item *cur_list =
-					list_tail(&list_stack, struct toml_stack_item, list);
-		if (cur_list)
+		struct toml_stack_item *context = CONTEXT(&context_stack);
+		if (context->node->type == TOML_LIST)
 			fnext list;
-		else if (inline_table)
+		else if (context->node->type == TOML_INLINE_TABLE)
 			fnext inline_table;
+		else
+			fnext start;
 	}
 
 	action saw_string {
@@ -210,15 +242,16 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 		}
 		memcpy(node.value.string, string, len);
 
-		if (!add_node_to_tree(&list_stack, cur_table, &node, name, &parse_error, &malloc_error, cur_line))
+		if (!add_node_to_tree(&context_stack, &node, name, &parse_error, &malloc_error, cur_line))
 			fbreak;
 
-		struct toml_stack_item *cur_list =
-					list_tail(&list_stack, struct toml_stack_item, list);
-		if (cur_list)
+		struct toml_stack_item *context = CONTEXT(&context_stack);
+		if (context->node->type == TOML_LIST)
 			fnext list;
-		else if (inline_table)
+		else if (context->node->type == TOML_INLINE_TABLE)
 			fnext inline_table;
+		else
+			fnext start;
 	}
 
 	action saw_date {
@@ -235,95 +268,75 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 		else
 			node.value.rfc3339_time.sec_frac = -1;
 
-		if (!add_node_to_tree(&list_stack, cur_table, &node, name, &parse_error, &malloc_error, cur_line))
+		if (!add_node_to_tree(&context_stack, &node, name, &parse_error, &malloc_error, cur_line))
 			fbreak;
 
-		struct toml_stack_item *cur_list =
-					list_tail(&list_stack, struct toml_stack_item, list);
-		if (cur_list)
+		struct toml_stack_item *context = CONTEXT(&context_stack);
+		if (context->node->type == TOML_LIST)
 			fnext list;
-		else if (inline_table)
+		else if (context->node->type == TOML_INLINE_TABLE)
 			fnext inline_table;
+		else
+			fnext start;
 	}
 
 	action start_list {
 		struct toml_node *node;
 
-		/*
-		 * if the list stack is empty add this list to the table
-		 * otherwise it should be added the to list on top of the stack
-		 */
-		if (list_empty(&list_stack)) {
-			struct toml_table_item *item = malloc(sizeof(*item));
-			if (!item) {
-				malloc_error = 1;
-				fbreak;
-			}
+		struct toml_stack_item* context = CONTEXT(&context_stack);
 
-			/* first add it to the table */
-			item->node.type = TOML_LIST;
-			list_head_init(&item->node.value.list);
-			list_add_tail(&cur_table->value.map, &item->map);
-			item->node.name = name;
-			node = &item->node;
-		} else {
-			struct toml_stack_item* tail =
-						list_tail(&list_stack, struct toml_stack_item, list);
-
-			if (tail->list_type && tail->list_type != TOML_LIST) {
-				asprintf(&parse_error,
+		if (context->list_type && context->list_type != TOML_LIST) {
+			asprintf(&parse_error,
 						"incompatible types list %s this %s line %d\n",
-						toml_type_to_str(tail->list_type),
+						toml_type_to_str(context->list_type),
 						toml_type_to_str(TOML_BOOLEAN), cur_line);
-				fbreak;
-			}
-
-			struct toml_list_item *item = malloc(sizeof(*item));
-			if (!item) {
-				malloc_error = 1;
-				fbreak;
-			}
-
-			tail->list_type = TOML_LIST;
-			item->node.type = TOML_LIST;
-			item->node.name = NULL;
-			list_head_init(&item->node.value.list);
-
-			list_add_tail(&tail->node->value.list, &item->list);
-			node = &item->node;
+			fbreak;
 		}
 
-		/* push this list onto the stack */
-		struct toml_stack_item *stack_item = malloc(sizeof(*stack_item));
-		if (!stack_item) {
+		struct toml_list_item *item = malloc(sizeof(*item));
+		if (!item) {
 			malloc_error = 1;
 			fbreak;
 		}
-		stack_item->node = node;
-		stack_item->list_type = 0;
-		list_add_tail(&list_stack, &stack_item->list);
+
+		context->list_type = TOML_LIST;
+		item->node.type = TOML_LIST;
+		if (name)
+		{
+			item->node.name = name;
+			name = NULL;
+		}
+		list_head_init(&item->node.value.list);
+
+		list_add_tail(&context->node->value.list, &item->list);
+		node = &item->node;
+
+		/* push this list onto the stack */
+		struct toml_stack_item *stack_item = make_stack_item(node);
+		PUSH_CONTEXT(stack_item);
 	}
 
 	action end_list {
-		struct toml_stack_item *tail =
-						list_tail(&list_stack, struct toml_stack_item, list);
+		struct toml_node* x;
+		POP_CONTEXT(x);
 
-		list_del(&tail->list);
-		free(tail);
-
-		if (!list_empty(&list_stack))
+		struct toml_stack_item *context = CONTEXT(&context_stack);
+		if (context->node->type == TOML_LIST)
 			fnext list;
-		else if (inline_table)
+		else if (context->node->type == TOML_INLINE_TABLE)
 			fnext inline_table;
+		else
+			fnext start;
 	}
 
 	action saw_inline_table {
 		char*					tablename = name;
 		struct toml_table_item*	item;
-		struct toml_node*		place = cur_table ? cur_table : toml_root;
+		struct toml_node*		place;
 		bool					found = false;
 
-		inline_table = true;
+		struct toml_stack_item*	context = CONTEXT(&context_stack);
+		place = context->node;
 
 		list_for_each(&place->value.map, item, map) {
 			if (strcmp(item->node.name, tablename) != 0)
@@ -346,38 +359,76 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 		}
 
 		item->node.name = strdup(tablename);
-		item->node.type = TOML_TABLE;
+		item->node.type = TOML_INLINE_TABLE;
 		list_head_init(&item->node.value.map);
 		list_add_tail(&place->value.map, &item->map);
 
-		cur_table = &item->node;
+		context = make_stack_item(&item->node);
+		PUSH_CONTEXT(context);
 
 		free(tablename);
+	}
+
+	action end_inline_table {
+		struct toml_node* x;
+		POP_CONTEXT(x);
+
+		struct toml_stack_item *context = CONTEXT(&context_stack);
+		if (context->node->type == TOML_LIST)
+			fnext list;
+		else if (context->node->type == TOML_INLINE_TABLE)
+			fnext inline_table;
+		else
+			fnext start;
 	}
 
 	action saw_table {
 		int len = (int)(p-ts);
 
-		struct toml_node *place = cur_table ? cur_table : toml_root;
+		// drop the previous context if it is a TABLE
+		struct toml_stack_item* context = CONTEXT(&context_stack);
+		if (context->node->type == TOML_TABLE)
+		{
+			struct toml_node* x;
+			POP_CONTEXT(x);
+		}
+
+		struct toml_node *new_table;
 
 		int		result;
 		char*	name = strndup(ts, len);
 
-		result = SawTable(toml_root, name, &cur_table, &parse_error);
+		result = SawTable(toml_root, name, &new_table, &parse_error);
 		free(name);
 		if (result)
 			fbreak;
+
+		context = make_stack_item(new_table);
+		PUSH_CONTEXT(context);
 	}
 
 	action saw_table_array {
 		int		ret;
 		char*	tableName;
 
+		// drop the previous context if it is a TABLE
+		struct toml_stack_item* context = CONTEXT(&context_stack);
+		if (context->node->type == TOML_TABLE)
+		{
+			struct toml_node* x;
+			POP_CONTEXT(x);
+		}
+
+		struct toml_node* new_table_array;
+
 		tableName = strndup(ts, (int)(p-ts-1));
-		ret = SawTableArray(toml_root, tableName, &cur_table, &parse_error);
+		ret = SawTableArray(toml_root, tableName, &new_table_array, &parse_error);
 		free(tableName);
 		if (ret)
 			fbreak;
+
+		context = make_stack_item(new_table_array);
+		PUSH_CONTEXT(context);
 	}
 
 	action saw_utf16 {
@@ -421,7 +472,7 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 			[\t ]+		>{in_text = 0; indent = 0;} ${indent++;}	@{fgoto start;}	|
 			[\n]		>{in_text = 0; cur_line++;}					@{fgoto start;}	|
 			[\0]		>{in_text = 0; fbreak;}						@{fgoto start;}	|
-			[^\t \n]	@{fhold;} %{in_text = 1;}					->text
+			[^#\t \n\0]	@{fhold;} %{in_text = 1;}					->text
 		),
 
 		# just discard everything until newline
@@ -628,8 +679,9 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 		inline_table: (
 			','								@{fgoto inline_table;}	|
 			[\t ]							@{fgoto inline_table;}	|
-			'}'	@{inline_table = false;}	-> start				|
-			[^\t ,}] @{fhold;}				-> key
+			'#'		>{fcall comment;}		->inline_table			|
+			'}'		$end_inline_table		->start					|
+			[^\t ,}] @{fhold;}				->key
 		),
 
 		# A val can be either a list or a singular value
@@ -664,6 +716,18 @@ bool add_node_to_tree(struct list_head* list_stack, struct toml_node* cur_table,
 
 %%write data;
 
+static struct toml_stack_item*
+make_stack_item(struct toml_node* node)
+{
+	struct toml_stack_item* ret;
+
+	ret = malloc(sizeof(*ret));
+	ret->list_type = 0;
+	ret->node = node;
+
+	return ret;
+}
+
 int
 toml_parse(struct toml_node* toml_root, char* buf, int buflen)
 {
@@ -687,13 +751,14 @@ toml_parse(struct toml_node* toml_root, char* buf, int buflen)
 	char* secfrac_ptr;
 	bool time_offset_is_negative = 0;
 	bool time_offset_is_zulu = 0;
-	bool inline_table = false;
 	bool exponent = false;
 
-	struct toml_node *cur_table = toml_root;
+	struct list_head context_stack;
+	list_head_init(&context_stack);
 
-	struct list_head list_stack;
-	list_head_init(&list_stack);
+	struct toml_stack_item* root = make_stack_item(toml_root);
+
+	PUSH_CONTEXT(root);
 
 	assert(toml_root->type == TOML_ROOT);
 

@@ -27,8 +27,7 @@ testFruit(void)
 {
 	int					ret;
 	struct toml_node*	root;
-	char*				fruit =
-				"[fruit]\ntype = \"apple\"\n\n[fruit.type]\napple = \"yes\"\n";
+	char*				fruit = "[fruit]\ntype = \"apple\"\n\n[fruit.type]\napple = \"yes\"\n";
 
 	toml_init(&root);
 
@@ -72,7 +71,7 @@ testNumbers(void)
 	CU_ASSERT(ret == 0);
 
 	one = toml_get(root, "one");
-	CU_ASSERT(one != NULL);
+	CU_ASSERT_FATAL(one != NULL);
 
 	one_as_string = toml_value_as_string(one);
 	CU_ASSERT(one_as_string != NULL);
@@ -119,7 +118,7 @@ testUTF16(void)
 	CU_ASSERT(ret == 0);
 
 	node = toml_get(root, "string_with_utf16");
-	CU_ASSERT(node != NULL);
+	CU_ASSERT_FATAL(node != NULL);
 	CU_ASSERT(node->type == TOML_STRING);
 	CU_ASSERT(memcmp(node->value.string, expected_result, sizeof(expected_result)) == 0);
 
@@ -147,7 +146,7 @@ testUTF32(void)
 	CU_ASSERT(ret == 0);
 
 	node = toml_get(root, "string_with_utf32");
-	CU_ASSERT(node != NULL);
+	CU_ASSERT_FATAL(node != NULL);
 	CU_ASSERT(node->type == TOML_STRING);
 	CU_ASSERT(memcmp(node->value.string, expected_result, sizeof(expected_result)) == 0);
 
@@ -172,7 +171,7 @@ testLiteralString(void)
 	CU_ASSERT(ret == 0);
 
 	node = toml_get(root, "winpath");
-	CU_ASSERT(node != NULL);
+	CU_ASSERT_FATAL(node != NULL);
 	CU_ASSERT(node->type == TOML_STRING);
 	CU_ASSERT(memcmp(node->value.string, winpath, sizeof(winpath)) == 0);
 
@@ -211,7 +210,7 @@ testLiteralMultiLineString(void)
 	CU_ASSERT(ret == 0);
 
 	node = toml_get(root, "regex2");
-	CU_ASSERT(node != NULL);
+	CU_ASSERT_FATAL(node != NULL);
 	CU_ASSERT(node->type == TOML_STRING);
 	CU_ASSERT(memcmp(node->value.string, regex2, sizeof(regex2)) == 0);
 
@@ -247,7 +246,7 @@ testMultiLine(void)
 	CU_ASSERT(ret == 0);
 
 	node = toml_get(root, "onetwo1");
-	CU_ASSERT(node != NULL);
+	CU_ASSERT_FATAL(node != NULL);
 	CU_ASSERT(node->type == TOML_STRING);
 	CU_ASSERT(memcmp(node->value.string, expected_result, sizeof(expected_result)) == 0);
 
@@ -335,7 +334,7 @@ testRFC3339(void)
 		CU_ASSERT(ret == 0);
 
 		node = toml_get(root, "rfc3339");
-		CU_ASSERT(node != NULL);
+		CU_ASSERT_FATAL(node != NULL);
 		CU_ASSERT(node->type == TOML_DATE);
 
 		result = toml_value_as_string(node);
@@ -362,7 +361,7 @@ testInlineTable(void)
 	CU_ASSERT(ret == 0);
 
 	node = toml_get(root, "name.first");
-	CU_ASSERT(node != NULL);
+	CU_ASSERT_FATAL(node != NULL);
 	CU_ASSERT(node->type == TOML_STRING);
 
 	result = toml_value_as_string(node);
@@ -371,7 +370,7 @@ testInlineTable(void)
 	free(result);
 
 	node = toml_get(root, "name.last");
-	CU_ASSERT(node != NULL);
+	CU_ASSERT_FATAL(node != NULL);
 	CU_ASSERT(node->type == TOML_STRING);
 
 	result = toml_value_as_string(node);
@@ -380,7 +379,7 @@ testInlineTable(void)
 	free(result);
 
 	node = toml_get(root, "name.x");
-	CU_ASSERT(node != NULL);
+	CU_ASSERT_FATAL(node != NULL);
 	CU_ASSERT(node->type == TOML_INT);
 	result = toml_value_as_string(node);
 	CU_ASSERT(result != NULL);
@@ -388,17 +387,14 @@ testInlineTable(void)
 	free(result);
 
 	node = toml_get(root, "point.x");
-	CU_ASSERT(node != NULL);
-	if (node)
+	CU_ASSERT_FATAL(node != NULL);
+	CU_ASSERT(node->type == TOML_INT);
+	result = toml_value_as_string(node);
+	CU_ASSERT(result != NULL);
+	if (result)
 	{
-		CU_ASSERT(node->type == TOML_INT);
-		result = toml_value_as_string(node);
-		CU_ASSERT(result != NULL);
-		if (result)
-		{
-			CU_ASSERT(strcmp(result, "1") == 0);
-			free(result);
-		}
+		CU_ASSERT(strcmp(result, "1") == 0);
+		free(result);
 	}
 
 	toml_free(root);
@@ -408,15 +404,12 @@ testInlineTable(void)
 	ret = toml_parse(root, recursiveInlineTable, strlen(recursiveInlineTable));
 	CU_ASSERT(ret == 0);
 	node = toml_get(root, "name.point.y");
-	CU_ASSERT(node != NULL);
-	if (node)
-	{
-		CU_ASSERT(node->type == TOML_INT);
-		result = toml_value_as_string(node);
-		CU_ASSERT(result != NULL);
-		CU_ASSERT(strcmp(result, "2") == 0);
-		free(result);
-	}
+	CU_ASSERT_FATAL(node != NULL);
+	CU_ASSERT(node->type == TOML_INT);
+	result = toml_value_as_string(node);
+	CU_ASSERT(result != NULL);
+	CU_ASSERT(strcmp(result, "2") == 0);
+	free(result);
 
 	toml_free(root);
 }
