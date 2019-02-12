@@ -3,7 +3,7 @@ libtoml.dylib
 libtoml.so
 main
 main.o
-test
+test-toml
 test.o
 toml.o
 toml_parse.c
