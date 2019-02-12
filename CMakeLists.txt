@@ -2,8 +2,12 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
 PROJECT(libtoml)
 
 FIND_PROGRAM(RAGEL ragel)
+if(NOT RAGEL)
+    message(FATAL_ERROR "Ragel executable not found!")
+endif()
+
 FIND_PACKAGE(PkgConfig)
-PKG_CHECK_MODULES(PC_LIBICU icu-uc)
+PKG_CHECK_MODULES(PC_LIBICU REQUIRED icu-uc)
 PKG_CHECK_MODULES(PC_CUNIT cunit)
 
 SET(RAGEL_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/toml_parse.rl)
@@ -32,5 +36,10 @@ TARGET_LINK_LIBRARIES(toml ${PC_LIBICU_LIBRARIES})
 
 ADD_EXECUTABLE(main main.c)
 TARGET_LINK_LIBRARIES(main toml ${PC_LIBICU_LIBRARIES})
-ADD_EXECUTABLE(test-toml test.c)
-TARGET_LINK_LIBRARIES(test-toml toml ${PC_LIBICU_LIBRARIES} ${PC_CUNIT_LIBRARIES})
+
+if(NOT PC_CUNIT_FOUND)
+    message(WARNING "CUnit was not found, not building tests")
+else()
+    ADD_EXECUTABLE(test-toml test.c)
+    TARGET_LINK_LIBRARIES(test-toml toml ${PC_LIBICU_LIBRARIES} ${PC_CUNIT_LIBRARIES})
+endif()
