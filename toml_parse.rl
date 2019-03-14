@@ -24,6 +24,7 @@ struct toml_stack_item {
 	struct toml_stack_item* context = CONTEXT(&context_stack);	\
 	list_del(&context->list);									\
 	x = context->node;											\
+    free(context);                                              \
 } while (0)
 
 static size_t
@@ -301,6 +302,7 @@ add_node_to_tree(struct list_head* context_stack, struct toml_node* node, char* 
 
 		context->list_type = TOML_LIST;
 		item->node.type = TOML_LIST;
+        item->node.name = NULL;
 		if (name)
 		{
 			item->node.name = name;
@@ -768,6 +770,10 @@ toml_parse(struct toml_node* toml_root, char* buf, int buflen)
 	pe = buf + buflen + 1;
 
 	%% write exec;
+
+    while ((root = CONTEXT(&context_stack))) {
+        POP_CONTEXT(toml_root);
+    }
 
 	if (malloc_error) {
 		fprintf(stderr, "malloc failed, line %d\n", cur_line);
